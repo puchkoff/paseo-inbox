@@ -25,10 +25,13 @@ function bodyOf(input: Record<string, unknown> | undefined, description: string 
 }
 
 export async function listInbox(_input: unknown, { paseo }: PluginHandlerContext) {
-  const [{ entries }, workspaces] = await Promise.all([
+  // A running agent blocked on a permission is not flagged requiresAttention, so query running agents too.
+  const [attention, running, workspaces] = await Promise.all([
     paseo.agents.list({ filter: { requiresAttention: true, includeArchived: false }, page: { limit: 200 } }),
+    paseo.agents.list({ filter: { statuses: ["running"], includeArchived: false }, page: { limit: 200 } }),
     workspaceIndex(paseo),
   ]);
+  const entries = [...new Map([...attention.entries, ...running.entries].map((e) => [e.agent.id, e])).values()];
 
   const items: InboxItem[] = [];
   for (const { agent } of entries) {
@@ -40,7 +43,7 @@ export async function listInbox(_input: unknown, { paseo }: PluginHandlerContext
       projectId: ws?.projectId ?? null,
       project: ws?.project ?? "",
       workspace: ws?.workspace ?? "",
-      at: agent.attentionTimestamp ?? null,
+      at: agent.attentionTimestamp ?? (agent.pendingPermissions.length > 0 ? agent.updatedAt : null),
     };
     if (agent.pendingPermissions.length > 0) {
       for (const req of agent.pendingPermissions) {
