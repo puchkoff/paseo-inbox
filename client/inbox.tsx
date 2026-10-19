@@ -1,14 +1,12 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
-import { useRpc, useSettings } from "@getpaseo/plugin/client";
+import { useSettings } from "@getpaseo/plugin/client";
 import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { type InboxItem, answerRequest, listInbox } from "../shared/rpc.ts";
+import type { InboxItem } from "../shared/inbox.ts";
 import { type Rule, rulesSettings } from "../shared/rules.ts";
-
-export const INBOX_KEY = "paseo-inbox";
+import { answer, useInbox } from "./use-inbox.ts";
 
 function age(iso: string | null): string {
   if (!iso) return "";
@@ -49,12 +47,14 @@ interface CardProps {
   theme: PluginTheme;
   item: InboxItem;
   rulesReady: boolean;
+  // Rules live on the host this screen is open on; an item from another host can't save one here.
+  rulesHere: boolean;
   busy: boolean;
   onAnswer: (item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) => void;
   onOpen?: (item: InboxItem) => void;
 }
 
-function Card({ theme, item, rulesReady, busy, onAnswer, onOpen }: CardProps) {
+function Card({ theme, item, rulesReady, rulesHere, busy, onAnswer, onOpen }: CardProps) {
   const [always, setAlways] = useState(false);
   const req = item.request;
   const c = theme.colors;
@@ -62,7 +62,7 @@ function Card({ theme, item, rulesReady, busy, onAnswer, onOpen }: CardProps) {
     item.reason === "permission" ? { color: c.statusWarning, label: req?.kind ?? "permission" }
     : item.reason === "error" ? { color: c.statusDanger, label: "error" }
     : { color: c.statusSuccess, label: "finished" };
-  const canAlways = !!req && req.kind === "tool" && !!req.command && !req.risky && !!item.projectId && rulesReady;
+  const canAlways = !!req && req.kind === "tool" && !!req.command && !req.risky && !!item.projectId && rulesReady && rulesHere;
   const customActions = req?.actions ?? [];
 
   return (
@@ -71,7 +71,7 @@ function Card({ theme, item, rulesReady, busy, onAnswer, onOpen }: CardProps) {
         <Tag {...tag} />
         <Text style={{ color: c.foreground, fontWeight: "600" }}>{item.title}</Text>
         <Text style={{ color: c.foregroundMuted, fontSize: 12, flex: 1 }} numberOfLines={1}>
-          {[item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
+          {[item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
         </Text>
         <Text style={{ color: c.foregroundMuted, fontSize: 12 }}>{age(item.at)}</Text>
       </View>
@@ -84,7 +84,7 @@ function Card({ theme, item, rulesReady, busy, onAnswer, onOpen }: CardProps) {
               <Text selectable style={{ color: c.foreground, fontFamily: "monospace", fontSize: 12.5 }}>{req.body}</Text>
             </View>
           ) : null}
-          {req.risky ? (
+          {req.risky && rulesHere ? (
             <Text style={{ color: c.statusDanger, fontSize: 12.5 }}>Matches a destructive pattern. "Always allow" is off for this command.</Text>
           ) : null}
         </View>
@@ -116,7 +116,9 @@ function Card({ theme, item, rulesReady, busy, onAnswer, onOpen }: CardProps) {
             style={{ marginLeft: "auto", opacity: canAlways ? 1 : 0.4 }}
           >
             <Text style={{ color: c.foregroundMuted, fontSize: 12.5 }}>
-              {always ? "☑" : "☐"} Always allow this exact command in {item.project || "this project"}
+              {rulesHere
+                ? `${always ? "☑" : "☐"} Always allow this exact command in ${item.project || "this project"}`
+                : `Rules are per daemon: open Inbox on ${item.hostLabel} to add one`}
             </Text>
           </Pressable>
         ) : null}
@@ -125,7 +127,7 @@ function Card({ theme, item, rulesReady, busy, onAnswer, onOpen }: CardProps) {
   );
 }
 
-function Rules({ theme }: { theme: PluginTheme }) {
+function Rules({ theme, hostLabel }: { theme: PluginTheme; hostLabel: string }) {
   const settings = useSettings(rulesSettings);
   const c = theme.colors;
   if (settings.status === "loading") return <Text style={{ color: c.foregroundMuted }}>Loading…</Text>;
@@ -135,7 +137,7 @@ function Rules({ theme }: { theme: PluginTheme }) {
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ color: c.foregroundMuted, fontSize: 12.5 }}>
-        Rules answer tool permission requests. They match the exact command in one project, never a pattern. Destructive commands are never auto-allowed.
+        Rules on {hostLabel}. They answer tool permission requests there and match the exact command in one project, never a pattern. Destructive commands are never auto-allowed.
       </Text>
       {rules.length === 0 ? <Text style={{ color: c.foregroundMuted, paddingVertical: 24, textAlign: "center" }}>No rules yet. Tick "Always allow" on a request to add one.</Text> : null}
       {rules.map((r) => (
@@ -153,20 +155,16 @@ function Rules({ theme }: { theme: PluginTheme }) {
 
 export function InboxScreen({ theme, host, layout, navigation }: PluginScreenProps) {
   const c = theme.colors;
-  const list = useRpc(listInbox);
-  const answer = useRpc(answerRequest);
   const settings = useSettings(rulesSettings);
   const toast = useToast();
-  const qc = useQueryClient();
   const [tab, setTab] = useState<"queue" | "rules">("queue");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const { items, problems, loaded, refresh } = useInbox(2000);
 
-  const query = useQuery({ queryKey: [INBOX_KEY, host.id], queryFn: () => list({}), refetchInterval: 2000 });
-  const items = query.data?.items ?? [];
-
-  const respond = useMutation({
-    mutationFn: async (v: { item: InboxItem; behavior: "allow" | "deny"; actionId?: string; always?: boolean }) => {
-      const { item, behavior, actionId, always } = v;
-      if (always && item.request?.command && item.projectId && settings.status === "ready") {
+  async function respond(item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) {
+    setBusyKey(item.key);
+    try {
+      if (opts?.always && item.request?.command && item.projectId && settings.status === "ready") {
         const rule: Rule = {
           id: `${Date.now()}`, action: "allow", command: item.request.command,
           projectId: item.projectId, projectName: item.project, createdAt: new Date().toISOString(),
@@ -175,14 +173,16 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           throw new Error("Could not save the rule");
         }
       }
-      const res = await answer({ agentId: item.agentId, requestId: item.request?.id ?? "", behavior, selectedActionId: actionId });
-      if (!res.ok) throw new Error(res.error ?? "Answer failed");
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
-    onSettled: () => qc.invalidateQueries({ queryKey: [INBOX_KEY, host.id] }),
-  });
+      await answer(item, behavior, opts?.actionId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyKey(null);
+      void refresh();
+    }
+  }
 
-  const openAgent = navigation ? (item: InboxItem) => navigation.openAgent({ agentId: item.agentId, serverId: host.id }) : undefined;
+  const openAgent = navigation ? (item: InboxItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
   const pending = items.filter((i) => i.reason === "permission").length;
 
   return (
@@ -195,17 +195,16 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         <Btn theme={theme} label="Auto-rules" tone={tab === "rules" ? "pri" : "plain"} onPress={() => setTab("rules")} />
       </View>
 
-      {tab === "rules" ? <Rules theme={theme} /> : query.isError ? (
-        <Text style={{ color: c.statusDanger }}>Could not load the inbox: {query.error instanceof Error ? query.error.message : "unknown error"}</Text>
-      ) : items.length === 0 ? (
-        <Text style={{ color: c.foregroundMuted, textAlign: "center", paddingVertical: 60 }}>{query.isLoading ? "Loading…" : "Nothing waiting on you."}</Text>
+      {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: 12.5 }}>Not shown: {problems.join(" · ")}</Text> : null}
+
+      {tab === "rules" ? <Rules theme={theme} hostLabel={host.label} /> : items.length === 0 ? (
+        <Text style={{ color: c.foregroundMuted, textAlign: "center", paddingVertical: 60 }}>{loaded ? "Nothing waiting on you." : "Loading…"}</Text>
       ) : (
         <>
           {pending > 0 ? <Text style={{ color: c.foregroundMuted, fontSize: 12 }}>{pending} permission request{pending === 1 ? "" : "s"}, oldest first</Text> : null}
           {items.map((item) => (
-            <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"}
-              busy={respond.isPending && respond.variables?.item.key === item.key}
-              onAnswer={(it, behavior, opts) => respond.mutate({ item: it, behavior, ...opts })} onOpen={openAgent} />
+            <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
+              busy={busyKey === item.key} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />
           ))}
         </>
       )}

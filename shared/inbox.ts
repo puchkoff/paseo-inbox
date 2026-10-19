@@ -1,10 +1,30 @@
-import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import type { InboxItem } from "../shared/rpc.ts";
-import { commandOf, isDestructive } from "../shared/rules.ts";
-
-type Paseo = PluginHandlerContext["paseo"];
+import type { PaseoApi } from "@getpaseo/client";
+import { commandOf, isDestructive } from "./rules.ts";
 
 const BODY_MAX = 1500;
+
+export interface InboxItem {
+  key: string;
+  hostId: string;
+  hostLabel: string;
+  agentId: string;
+  title: string;
+  provider: string;
+  projectId: string | null;
+  project: string;
+  workspace: string;
+  at: string | null;
+  reason: "permission" | "finished" | "error";
+  request: {
+    id: string;
+    kind: "tool" | "plan" | "question" | "mode" | "other";
+    title: string;
+    body: string;
+    command: string | null;
+    risky: boolean;
+    actions: { id: string; label: string; behavior: "allow" | "deny" }[];
+  } | null;
+}
 
 export interface WorkspaceInfo {
   projectId: string;
@@ -12,7 +32,7 @@ export interface WorkspaceInfo {
   workspace: string;
 }
 
-export async function workspaceIndex(paseo: Paseo): Promise<Map<string, WorkspaceInfo>> {
+export async function workspaceIndex(paseo: PaseoApi): Promise<Map<string, WorkspaceInfo>> {
   const { entries } = await paseo.workspaces.list();
   return new Map(
     entries.map((w) => [w.id, { projectId: w.projectId, project: w.projectDisplayName, workspace: w.name }]),
@@ -24,7 +44,8 @@ function bodyOf(input: Record<string, unknown> | undefined, description: string 
   return text.length > BODY_MAX ? `${text.slice(0, BODY_MAX)}…` : text;
 }
 
-export async function listInbox(_input: unknown, { paseo }: PluginHandlerContext) {
+// One host's items. The caller stamps hostId/hostLabel and prefixes the key.
+export async function collectInbox(paseo: PaseoApi): Promise<Omit<InboxItem, "hostId" | "hostLabel">[]> {
   // A running agent blocked on a permission is not flagged requiresAttention, so query running agents too.
   const [attention, running, workspaces] = await Promise.all([
     paseo.agents.list({ filter: { requiresAttention: true, includeArchived: false }, page: { limit: 200 } }),
@@ -33,7 +54,7 @@ export async function listInbox(_input: unknown, { paseo }: PluginHandlerContext
   ]);
   const entries = [...new Map([...attention.entries, ...running.entries].map((e) => [e.agent.id, e])).values()];
 
-  const items: InboxItem[] = [];
+  const items: Omit<InboxItem, "hostId" | "hostLabel">[] = [];
   for (const { agent } of entries) {
     const ws = agent.workspaceId ? workspaces.get(agent.workspaceId) : undefined;
     const base = {
@@ -67,30 +88,15 @@ export async function listInbox(_input: unknown, { paseo }: PluginHandlerContext
       items.push({ ...base, key: `${agent.id}:attention`, reason: agent.attentionReason, request: null });
     }
   }
+  return items;
+}
 
-  // Longest-waiting permission first, then the newest finished/error.
-  const rank = (i: InboxItem) => (i.reason === "permission" ? 0 : i.reason === "error" ? 1 : 2);
-  items.sort((a, b) => {
+// Longest-waiting permission first, then errors, then the newest finished.
+export function sortInbox<T extends Pick<InboxItem, "reason" | "at">>(items: T[]): T[] {
+  const rank = (i: T) => (i.reason === "permission" ? 0 : i.reason === "error" ? 1 : 2);
+  return items.sort((a, b) => {
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
     const d = (a.at ?? "").localeCompare(b.at ?? "");
     return a.reason === "permission" ? d : -d;
   });
-  return { items };
-}
-
-export async function answerRequest(
-  input: { agentId: string; requestId: string; behavior: "allow" | "deny"; selectedActionId?: string },
-  { paseo }: PluginHandlerContext,
-) {
-  try {
-    const { agentId, requestId, behavior, selectedActionId } = input;
-    const response =
-      behavior === "allow"
-        ? { behavior, ...(selectedActionId ? { selectedActionId } : {}) }
-        : { behavior, message: "Denied from Inbox", ...(selectedActionId ? { selectedActionId } : {}) };
-    await paseo.agents.ref(agentId).respondToPermission({ requestId, response });
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
-  }
 }

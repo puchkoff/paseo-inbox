@@ -1,6 +1,6 @@
 import type { PluginLifecycleRegistration } from "@getpaseo/plugin/server";
 import { type Rule, commandOf, findRule, isDestructive } from "../shared/rules.ts";
-import { workspaceIndex } from "./inbox.ts";
+import { workspaceIndex } from "../shared/inbox.ts";
 
 // Answers tool permission requests that match a saved rule. Anything else stays pending for the Inbox screen.
 export function registerAutoAnswer(

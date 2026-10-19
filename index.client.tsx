@@ -1,27 +1,11 @@
 import type { PluginClientContext, PluginSidebarItemProps } from "@getpaseo/plugin/client";
-import { useRpc } from "@getpaseo/plugin/client";
 import { SidebarRow } from "@getpaseo/plugin/client/ui";
-import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { InboxScreen } from "./client/inbox.tsx";
-import { listInbox } from "./shared/rpc.ts";
-
-// Plain polling: a sidebar item is not guaranteed a React Query client.
-function useWaiting(): number {
-  const list = useRpc(listInbox);
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    let live = true;
-    const tick = () => list({}).then((r) => live && setN(r.items.length), () => {});
-    void tick();
-    const t = setInterval(tick, 5000);
-    return () => { live = false; clearInterval(t); };
-  }, [list]);
-  return n;
-}
+import { useInbox } from "./client/use-inbox.ts";
 
 function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps) {
-  const waiting = useWaiting();
+  const waiting = useInbox(5000).items.length;
   return (
     <SidebarRow
       icon="Inbox"
