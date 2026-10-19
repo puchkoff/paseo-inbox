@@ -1,0 +1,9 @@
+{
+  "id": "paseo-inbox",
+  "media": [],
+  "requirements": {
+    "paseo": ">=0.11.4"
+  },
+  "name": "Inbox",
+  "description": "One screen for everything waiting on you, with auto-rules for permission requests."
+}
