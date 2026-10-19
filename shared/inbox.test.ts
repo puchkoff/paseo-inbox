@@ -33,6 +33,18 @@ test("finished and error agents become attention items; plain running agents are
   assert.deepEqual(items.map((i) => i.reason).sort(), ["error", "finished"]);
 });
 
+test("agents that are closed or live in an archived workspace are skipped", async () => {
+  const items = await collectInbox(fakeApi(
+    [
+      agent({ id: "closed", status: "closed", attentionReason: "finished" }),
+      agent({ id: "orphan", workspaceId: "archived-ws", attentionReason: "finished" }),
+      agent({ id: "ok", attentionReason: "finished" }),
+    ],
+    [],
+  ));
+  assert.deepEqual(items.map((i) => i.agentId), ["ok"]);
+});
+
 test("sort: permissions oldest first, then errors, then newest finished", () => {
   const it = (reason: "permission" | "error" | "finished", at: string) => ({ reason, at });
   const r = sortInbox([it("finished", "1"), it("permission", "3"), it("finished", "2"), it("error", "1"), it("permission", "2")]);

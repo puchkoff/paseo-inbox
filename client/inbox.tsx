@@ -1,6 +1,6 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
-import { useSettings } from "@getpaseo/plugin/client";
+import { useHosts, useSettings } from "@getpaseo/plugin/client";
 import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -159,7 +159,13 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const toast = useToast();
   const [tab, setTab] = useState<"queue" | "rules">("queue");
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const { items, problems, loaded, refresh } = useInbox(2000);
+  const { items: allItems, problems, loaded, refresh } = useInbox(2000);
+  const hosts = useHosts();
+  // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
+  const [chosen, setChosen] = useState(host.id);
+  const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
+  const items = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
+  const countOn = (id: string) => allItems.filter((i) => i.hostId === id).length;
 
   async function respond(item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) {
     setBusyKey(item.key);
@@ -194,6 +200,15 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         <Btn theme={theme} label="Queue" tone={tab === "queue" ? "pri" : "plain"} onPress={() => setTab("queue")} />
         <Btn theme={theme} label="Auto-rules" tone={tab === "rules" ? "pri" : "plain"} onPress={() => setTab("rules")} />
       </View>
+
+      {hosts.length > 1 ? (
+        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+          <Btn theme={theme} label={`All hosts (${allItems.length})`} tone={scope === "all" ? "pri" : "plain"} onPress={() => setChosen("all")} />
+          {hosts.map((h) => (
+            <Btn key={h.serverId} theme={theme} label={`${h.label} (${countOn(h.serverId)})`} tone={scope === h.serverId ? "pri" : "plain"} onPress={() => setChosen(h.serverId)} />
+          ))}
+        </View>
+      ) : null}
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: 12.5 }}>Not shown: {problems.join(" · ")}</Text> : null}
 

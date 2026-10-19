@@ -57,6 +57,9 @@ export async function collectInbox(paseo: PaseoApi): Promise<Omit<InboxItem, "ho
   const items: Omit<InboxItem, "hostId" | "hostLabel">[] = [];
   for (const { agent } of entries) {
     const ws = agent.workspaceId ? workspaces.get(agent.workspaceId) : undefined;
+    // An agent in an archived workspace is not archived itself (archivedAt stays null) but is closed;
+    // the sidebar hides it, so the inbox must too.
+    if (agent.status === "closed" || agent.archivedAt || (agent.workspaceId && !ws)) continue;
     const base = {
       agentId: agent.id,
       title: agent.title ?? agent.id.slice(0, 8),
