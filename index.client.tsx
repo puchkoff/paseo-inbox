@@ -13,7 +13,7 @@ function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps)
       onPress={() => openScreen({ screenId: "inbox" })}
       trailing={waiting > 0 ? (
         <View style={{ backgroundColor: theme.colors.statusWarning, borderRadius: 999, paddingHorizontal: 7, marginRight: 8 }}>
-          <Text style={{ color: theme.colors.accentForeground, fontSize: 11, fontWeight: "700" }}>{waiting}</Text>
+          <Text style={{ color: theme.colors.accentForeground, fontSize: 14, fontWeight: "700" }}>{waiting}</Text>
         </View>
       ) : null}
     />

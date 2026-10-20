@@ -8,8 +8,8 @@ import type { InboxItem } from "../shared/inbox.ts";
 import { type Rule, rulesSettings } from "../shared/rules.ts";
 import { answer, useInbox } from "./use-inbox.ts";
 
-// One scale for the whole screen.
-const FS = { title: 26, body: 17, small: 15, tiny: 13.5 };
+// One scale for the whole screen (+25% over the first 26/17/15/13.5 scale).
+const FS = { title: 32, body: 21, small: 19, tiny: 17 };
 
 function age(iso: string | null): string {
   if (!iso) return "";
