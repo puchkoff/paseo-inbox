@@ -19,30 +19,33 @@ function age(iso: string | null): string {
   return min < 1440 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} d`;
 }
 
-type Tone = "ok" | "bad" | "pri" | "plain";
+// Hairline design: fixed indigo so buttons stay readable on light and dark themes.
+const INDIGO = "#6366f1";
+
+// ok = filled primary, pri = outlined primary, bad = outlined danger, plain = quiet chip, on = selected chip.
+type Tone = "ok" | "bad" | "pri" | "plain" | "on";
 
 function Btn({ theme, label, tone = "plain", disabled, onPress }: {
   theme: PluginTheme; label: string; tone?: Tone; disabled?: boolean; onPress: () => void;
 }) {
-  const bg = { ok: theme.colors.statusSuccess, bad: theme.colors.statusDanger, pri: theme.colors.accent, plain: theme.colors.surface2 }[tone];
+  const c = theme.colors;
+  const look = {
+    ok: { bg: INDIGO, fg: "#fff", border: INDIGO },
+    pri: { bg: "transparent", fg: INDIGO, border: `${INDIGO}73` },
+    bad: { bg: "transparent", fg: c.statusDanger, border: `${c.statusDanger}73` },
+    plain: { bg: c.surface2, fg: c.foregroundMuted, border: "transparent" },
+    on: { bg: c.foreground, fg: c.surface0, border: "transparent" },
+  }[tone];
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={{ paddingHorizontal: 14, paddingVertical: 5, borderRadius: 8, backgroundColor: bg, opacity: disabled ? 0.4 : 1 }}
+      style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: look.border, backgroundColor: look.bg, opacity: disabled ? 0.4 : 1 }}
     >
-      <Text style={{ color: tone === "plain" ? theme.colors.foreground : theme.colors.accentForeground, fontSize: FS.small }}>{label}</Text>
+      <Text style={{ color: look.fg, fontSize: FS.small }}>{label}</Text>
     </Pressable>
-  );
-}
-
-function Tag({ color, label }: { color: string; label: string }) {
-  return (
-    <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 999, backgroundColor: `${color}26` }}>
-      <Text style={{ color, fontSize: FS.tiny, fontWeight: "600" }}>{label}</Text>
-    </View>
   );
 }
 
@@ -53,81 +56,120 @@ interface CardProps {
   // Rules live on the host this screen is open on; an item from another host can't save one here.
   rulesHere: boolean;
   busy: boolean;
+  compact: boolean;
   onAnswer: (item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) => void;
   onOpen?: (item: InboxItem) => void;
 }
 
-function Card({ theme, item, rulesReady, rulesHere, busy, onAnswer, onOpen }: CardProps) {
+// One hairline-separated row. Wide: status dot, title, meta, age and buttons on one line.
+// Compact (phone): title + age, then meta + button; a permission request stacks its buttons below.
+function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onOpen }: CardProps) {
   const [always, setAlways] = useState(false);
   const req = item.request;
   const c = theme.colors;
-  const tag =
+  const status =
     item.reason === "permission" ? { color: c.statusWarning, label: req?.kind ?? "permission" }
     : item.reason === "error" ? { color: c.statusDanger, label: "error" }
     : { color: c.statusSuccess, label: "finished" };
   const canAlways = !!req && req.kind === "tool" && !!req.command && !req.risky && !!item.projectId && rulesReady && rulesHere;
   const customActions = req?.actions ?? [];
 
-  return (
-    <View style={{ backgroundColor: c.surface1, borderColor: req?.risky ? c.statusDanger : c.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, gap: 6 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <Tag {...tag} />
-        <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>{item.title}</Text>
-        <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1 }} numberOfLines={1}>
-          {[item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
-        </Text>
-        <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{age(item.at)}</Text>
-      </View>
+  const dot = <View accessibilityLabel={status.label} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: status.color }} />;
+  const title = (
+    <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", flexShrink: 1 }} numberOfLines={compact ? 2 : 1}>
+      {item.title}
+      {item.reason === "error" ? <Text style={{ color: c.statusDanger, fontSize: FS.small, fontWeight: "400" }}>{"  error"}</Text> : null}
+    </Text>
+  );
+  const meta = (
+    <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
+      {[item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
+    </Text>
+  );
+  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{age(item.at)}</Text>;
+  const open = onOpen ? <Btn theme={theme} label="Open agent" tone="pri" onPress={() => onOpen(item)} /> : null;
+  const answers = req ? (
+    <>
+      {customActions.length > 0
+        ? customActions.map((a) => (
+            <Btn key={a.id} theme={theme} label={a.label} tone={a.behavior === "allow" ? "ok" : "bad"} disabled={busy}
+              onPress={() => onAnswer(item, a.behavior, { actionId: a.id })} />
+          ))
+        : (
+          <>
+            <Btn theme={theme} label="Allow once" tone="ok" disabled={busy} onPress={() => onAnswer(item, "allow", { always })} />
+            <Btn theme={theme} label="Deny" tone="bad" disabled={busy} onPress={() => onAnswer(item, "deny")} />
+          </>
+        )}
+      {open}
+    </>
+  ) : null;
+  const alwaysBox = req && customActions.length === 0 && req.kind === "tool" ? (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: always, disabled: !canAlways }}
+      disabled={!canAlways}
+      onPress={() => setAlways(!always)}
+      style={{ opacity: canAlways ? 1 : 0.4 }}
+    >
+      <Text style={{ color: c.foregroundMuted, fontSize: FS.tiny }}>
+        {rulesHere
+          ? `${always ? "☑" : "☐"} Always allow this exact command in ${item.project || "this project"}`
+          : `Rules are per daemon: open Inbox on ${item.hostLabel} to add one`}
+      </Text>
+    </Pressable>
+  ) : null;
 
-      {req ? (
-        <View style={{ gap: 6 }}>
-          {req.kind !== "tool" || !req.command ? <Text style={{ color: c.foreground, fontSize: FS.body }}>{req.title}</Text> : null}
-          {req.body ? (
-            <View style={{ backgroundColor: c.surface0, borderRadius: 8, padding: 10 }}>
-              <Text selectable style={{ color: c.foreground, fontFamily: "monospace", fontSize: FS.small }}>{req.body}</Text>
-            </View>
-          ) : null}
-          {req.risky && rulesHere ? (
-            <Text style={{ color: c.statusDanger, fontSize: FS.small }}>Matches a destructive pattern. "Always allow" is off for this command.</Text>
-          ) : null}
+  const detail = req ? (
+    <View style={{ gap: 6, marginTop: 8, marginLeft: compact ? 0 : 21 }}>
+      {req.kind !== "tool" || !req.command ? <Text style={{ color: c.foreground, fontSize: FS.body }}>{req.title}</Text> : null}
+      {req.body ? (
+        <View style={{ backgroundColor: c.surface1, borderRadius: 6, padding: 8 }}>
+          <Text selectable style={{ color: c.foreground, fontFamily: "monospace", fontSize: FS.small }}>{req.body}</Text>
         </View>
       ) : null}
+      {req.risky && rulesHere ? (
+        <Text style={{ color: c.statusDanger, fontSize: FS.small }}>Matches a destructive pattern. "Always allow" is off for this command.</Text>
+      ) : null}
+    </View>
+  ) : null;
 
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        {/* Message shares the button row to keep status cards one line shorter. */}
-        {!req ? (
-          <Text style={{ color: c.foregroundMuted, fontSize: FS.body, flex: 1 }}>
-            {item.reason === "error" ? "The agent stopped with an error." : "The agent finished and is waiting for you."}
-          </Text>
-        ) : null}
-        {req && customActions.length > 0
-          ? customActions.map((a) => (
-              <Btn key={a.id} theme={theme} label={a.label} tone={a.behavior === "allow" ? "ok" : "bad"} disabled={busy}
-                onPress={() => onAnswer(item, a.behavior, { actionId: a.id })} />
-            ))
-          : req ? (
-            <>
-              <Btn theme={theme} label="Allow once" tone="ok" disabled={busy} onPress={() => onAnswer(item, "allow", { always })} />
-              <Btn theme={theme} label="Deny" tone="bad" disabled={busy} onPress={() => onAnswer(item, "deny")} />
-            </>
-          ) : null}
-        {onOpen ? <Btn theme={theme} label="Open agent" tone={req ? "plain" : "pri"} onPress={() => onOpen(item)} /> : null}
-        {req && customActions.length === 0 && req.kind === "tool" ? (
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: always, disabled: !canAlways }}
-            disabled={!canAlways}
-            onPress={() => setAlways(!always)}
-            style={{ marginLeft: "auto", opacity: canAlways ? 1 : 0.4 }}
-          >
-            <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>
-              {rulesHere
-                ? `${always ? "☑" : "☐"} Always allow this exact command in ${item.project || "this project"}`
-                : `Rules are per daemon: open Inbox on ${item.hostLabel} to add one`}
-            </Text>
-          </Pressable>
+  const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: req?.risky ? c.statusDanger : c.border } as const;
+
+  if (compact) {
+    return (
+      <View style={{ ...frame, gap: 3 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+          <View style={{ paddingTop: 7 }}>{dot}</View>
+          <View style={{ flex: 1 }}>{title}</View>
+          {time}
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 19 }}>
+          {meta}
+          {req ? null : open}
+        </View>
+        {detail}
+        {req ? (
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+            {answers}
+            {alwaysBox ? <View style={{ flexBasis: "100%" }}>{alwaysBox}</View> : null}
+          </View>
         ) : null}
       </View>
+    );
+  }
+
+  return (
+    <View style={frame}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {dot}
+        {title}
+        {meta}
+        {time}
+        {req ? answers : open}
+        {alwaysBox}
+      </View>
+      {detail}
     </View>
   );
 }
@@ -198,19 +240,19 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.surface0 }} contentContainerStyle={{ padding: layout.compact ? 16 : 24, gap: 12, maxWidth: 860, width: "100%", alignSelf: "center" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Text style={{ color: c.foreground, fontSize: FS.title, fontWeight: "600", flex: 1 }}>
           Inbox <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{items.length ? `${items.length} waiting on you` : "all clear"}</Text>
         </Text>
-        <Btn theme={theme} label="Queue" tone={tab === "queue" ? "pri" : "plain"} onPress={() => setTab("queue")} />
-        <Btn theme={theme} label="Auto-rules" tone={tab === "rules" ? "pri" : "plain"} onPress={() => setTab("rules")} />
+        <Btn theme={theme} label="Queue" tone={tab === "queue" ? "on" : "plain"} onPress={() => setTab("queue")} />
+        <Btn theme={theme} label="Auto-rules" tone={tab === "rules" ? "on" : "plain"} onPress={() => setTab("rules")} />
       </View>
 
       {hosts.length > 1 ? (
         <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-          <Btn theme={theme} label={`All hosts (${allItems.length})`} tone={scope === "all" ? "pri" : "plain"} onPress={() => setChosen("all")} />
+          <Btn theme={theme} label={`All hosts (${allItems.length})`} tone={scope === "all" ? "on" : "plain"} onPress={() => setChosen("all")} />
           {hosts.map((h) => (
-            <Btn key={h.serverId} theme={theme} label={`${h.label} (${countOn(h.serverId)})`} tone={scope === h.serverId ? "pri" : "plain"} onPress={() => setChosen(h.serverId)} />
+            <Btn key={h.serverId} theme={theme} label={`${h.label} (${countOn(h.serverId)})`} tone={scope === h.serverId ? "on" : "plain"} onPress={() => setChosen(h.serverId)} />
           ))}
         </View>
       ) : null}
@@ -222,10 +264,12 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       ) : (
         <>
           {pending > 0 ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{pending} permission request{pending === 1 ? "" : "s"}, oldest first</Text> : null}
-          {items.map((item) => (
-            <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
-              busy={busyKey === item.key} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />
-          ))}
+          <View>
+            {items.map((item) => (
+              <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
+                busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />
+            ))}
+          </View>
         </>
       )}
     </ScrollView>
