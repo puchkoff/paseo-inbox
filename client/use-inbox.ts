@@ -9,6 +9,8 @@ export interface InboxState {
   loaded: boolean;
 }
 
+const HOST_TIMEOUT_MS = 8000;
+
 // Plain polling over every configured host. getPaseoClient borrows the app's own connection,
 // so the plugin does not need to be installed on the other daemons for them to show up.
 export function useInbox(pollMs: number): InboxState & { refresh: () => Promise<void> } {
@@ -17,16 +19,23 @@ export function useInbox(pollMs: number): InboxState & { refresh: () => Promise<
   const hostsKey = hosts.map((h) => `${h.serverId}:${h.status}`).join(",");
 
   const refresh = useCallback(async () => {
+    // A request the app never answers must not keep every other host on "Loading…".
     const results = await Promise.all(
       hosts.map(async (h) => {
         if (h.status !== "online") return { items: [] as InboxItem[], problem: `${h.label}: ${h.status}` };
+        let timer: ReturnType<typeof setTimeout> | undefined;
         try {
-          const items = (await collectInbox(getPaseoClient(h.serverId))).map((i) => ({
+          const timeout = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("no answer")), HOST_TIMEOUT_MS);
+          });
+          const items = (await Promise.race([collectInbox(getPaseoClient(h.serverId)), timeout])).map((i) => ({
             ...i, hostId: h.serverId, hostLabel: h.label, key: `${h.serverId}:${i.key}`,
           }));
           return { items, problem: null };
         } catch (e) {
           return { items: [] as InboxItem[], problem: `${h.label}: ${e instanceof Error ? e.message : String(e)}` };
+        } finally {
+          clearTimeout(timer);
         }
       }),
     );
