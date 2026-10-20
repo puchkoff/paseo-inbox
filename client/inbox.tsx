@@ -31,7 +31,7 @@ function Btn({ theme, label, tone = "plain", disabled, onPress }: {
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8, backgroundColor: bg, opacity: disabled ? 0.4 : 1 }}
+      style={{ paddingHorizontal: 14, paddingVertical: 5, borderRadius: 8, backgroundColor: bg, opacity: disabled ? 0.4 : 1 }}
     >
       <Text style={{ color: tone === "plain" ? theme.colors.foreground : theme.colors.accentForeground, fontSize: FS.small }}>{label}</Text>
     </Pressable>
@@ -69,7 +69,7 @@ function Card({ theme, item, rulesReady, rulesHere, busy, onAnswer, onOpen }: Ca
   const customActions = req?.actions ?? [];
 
   return (
-    <View style={{ backgroundColor: c.surface1, borderColor: req?.risky ? c.statusDanger : c.border, borderWidth: 1, borderRadius: 10, padding: 14, gap: 8 }}>
+    <View style={{ backgroundColor: c.surface1, borderColor: req?.risky ? c.statusDanger : c.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, gap: 6 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Tag {...tag} />
         <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>{item.title}</Text>
@@ -91,13 +91,15 @@ function Card({ theme, item, rulesReady, rulesHere, busy, onAnswer, onOpen }: Ca
             <Text style={{ color: c.statusDanger, fontSize: FS.small }}>Matches a destructive pattern. "Always allow" is off for this command.</Text>
           ) : null}
         </View>
-      ) : item.reason === "error" ? (
-        <Text style={{ color: c.foregroundMuted, fontSize: FS.body }}>The agent stopped with an error.</Text>
-      ) : (
-        <Text style={{ color: c.foregroundMuted, fontSize: FS.body }}>The agent finished and is waiting for you.</Text>
-      )}
+      ) : null}
 
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {/* Message shares the button row to keep status cards one line shorter. */}
+        {!req ? (
+          <Text style={{ color: c.foregroundMuted, fontSize: FS.body, flex: 1 }}>
+            {item.reason === "error" ? "The agent stopped with an error." : "The agent finished and is waiting for you."}
+          </Text>
+        ) : null}
         {req && customActions.length > 0
           ? customActions.map((a) => (
               <Btn key={a.id} theme={theme} label={a.label} tone={a.behavior === "allow" ? "ok" : "bad"} disabled={busy}
