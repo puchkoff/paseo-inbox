@@ -1,5 +1,7 @@
 # Inbox — a Paseo plugin
 
+![Inbox: Paseo plugin screen (illustration)](docs/hero.svg)
+
 One screen for everything waiting on you, with auto-rules for permission requests.
 
 Collects tool permission requests, plans and questions from agents, and agents that finished or failed. Answer in one press or open the agent. Polls every couple of seconds; the sidebar row shows the count.

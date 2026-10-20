@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf7ff"/>
+      <stop offset="0.55" stop-color="#f3f6ff"/>
+      <stop offset="1" stop-color="#fff6ec"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#c4b5fd" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#c4b5fd" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fdba74" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#fdba74" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#db2777"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffbeb"/>
+      <stop offset="1" stop-color="#fef3c7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#312e81" flood-opacity="0.16"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#b45309" flood-opacity="0.18"/>
+    </filter>
+    <symbol id="sparkles" viewBox="0 0 24 24">
+      <path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/>
+      <path d="M19 15l.9 2.1 2.1.9-2.1.9L19 21l-.9-2.1-2.1-.9 2.1-.9z"/>
+    </symbol>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="1060" cy="120" r="300" fill="url(#glowA)"/>
+  <circle cx="880" cy="600" r="260" fill="url(#glowB)"/>
+  <circle cx="90" cy="610" r="200" fill="url(#glowA)" opacity="0.6"/>
+  <g transform="translate(80 150)">
+    <rect x="0" y="0" width="196" height="36" rx="18" fill="#ede9fe"/>
+    <use href="#sparkles" x="14" y="8" width="20" height="20" fill="#7c3aed"/>
+    <text x="42" y="24" font-size="16" font-weight="600" fill="#6d28d9">Paseo plugin</text>
+    <text x="0" y="140" font-size="64" fill="url(#brand)" font-weight="800" text-anchor="start" letter-spacing="-1.5">Inbox</text>
+    <text x="0" y="232" font-size="22" fill="#4338ca" font-weight="400" text-anchor="start" opacity="0.85">Permissions, plans and questions on one screen.</text>
+    <circle cx="9" cy="281" r="5" fill="#f59e0b"/><text x="26" y="288" font-size="19" fill="#3f3f6e" font-weight="400" text-anchor="start" >Answer a request in one press</text><circle cx="9" cy="319" r="5" fill="#f59e0b"/><text x="26" y="326" font-size="19" fill="#3f3f6e" font-weight="400" text-anchor="start" >Always-allow rules per project</text><circle cx="9" cy="357" r="5" fill="#f59e0b"/><text x="26" y="364" font-size="19" fill="#3f3f6e" font-weight="400" text-anchor="start" >Destructive commands never auto-allowed</text>
+  </g>
+  <g transform="translate(680 70)" filter="url(#shadow)"><rect width="520" height="508" rx="28" fill="#ffffff"/></g>
+  <g transform="translate(680 70)">
+    <circle cx="36" cy="38" r="6" fill="#fca5a5"/><circle cx="56" cy="38" r="6" fill="#fde68a"/><circle cx="76" cy="38" r="6" fill="#a7f3d0"/>
+    <text x="260" y="44" font-size="15" fill="#6b7280" font-weight="600" text-anchor="middle" >Inbox</text>
+    <line x1="0" y1="68" x2="520" y2="68" stroke="#eef0f6"/>
+    <rect x="24" y="88" width="472" height="150" rx="12" fill="#ffffff" stroke="#e5e7f0"/>
+    <rect x="42" y="104" width="84" height="22" rx="11.0" fill="#fef3c7"/><text x="84.0" y="119.0" font-size="12" fill="#92400e" font-weight="600" text-anchor="middle" >Permission</text>
+    <text x="472" y="119" font-size="12" fill="#6b7280" font-weight="400" text-anchor="end" >~/WWW/api</text>
+    <rect x="42" y="136" width="436" height="34" rx="8" fill="#f6f7fb"/>
+    <text x="56" y="158" font-size="15" fill="#111827" font-weight="500" text-anchor="start" font-family="ui-monospace, Menlo, monospace">git status --short</text>
+    <rect x="42" y="184" width="16" height="16" rx="4" fill="#4f46e5"/><path d="M46 192 l3 3 6-7" stroke="#fff" stroke-width="2" fill="none"/>
+    <text x="66" y="197" font-size="13" fill="#374151" font-weight="400" text-anchor="start" >Always allow this exact command</text>
+    <rect x="352" y="196" width="60" height="28" rx="14" fill="#f6f7fb" stroke="#e5e7f0"/><text x="382" y="215" font-size="13" fill="#6b7280" font-weight="600" text-anchor="middle" >Deny</text>
+    <rect x="420" y="196" width="58" height="28" rx="14" fill="#4f46e5"/><text x="449" y="215" font-size="13" fill="#fff" font-weight="600" text-anchor="middle" >Allow</text>
+    <rect x="24" y="252" width="472" height="98" rx="12" fill="#ffffff" stroke="#e5e7f0"/>
+    <rect x="42" y="268" width="54" height="22" rx="11.0" fill="#ede9fe"/><text x="69.0" y="283.0" font-size="12" fill="#6d28d9" font-weight="600" text-anchor="middle" >Plan</text>
+    <text x="42" y="312" font-size="16" fill="#111827" font-weight="600" text-anchor="start" >Split export into two PRs?</text>
+    <text x="42" y="332" font-size="13" fill="#7c3aed" font-weight="600" text-anchor="start" >Approve  ·  Open agent</text>
+    <rect x="24" y="362" width="472" height="56" rx="12" fill="#ffffff" stroke="#e5e7f0"/>
+    <rect x="42" y="378" width="72" height="22" rx="11.0" fill="#d1fae5"/><text x="78.0" y="393.0" font-size="12" fill="#065f46" font-weight="600" text-anchor="middle" >Finished</text>
+    <text x="126" y="394" font-size="14" fill="#374151" font-weight="400" text-anchor="start" >Tests green, pushed to main</text>
+    <rect x="24" y="430" width="472" height="60" rx="12" fill="#ffffff" stroke="#e5e7f0"/>
+    <rect x="42" y="448" width="56" height="22" rx="11.0" fill="#fee2e2"/><text x="70.0" y="463.0" font-size="12" fill="#991b1b" font-weight="600" text-anchor="middle" >Error</text>
+    <text x="110" y="464" font-size="14" fill="#374151" font-weight="400" text-anchor="start" >Build failed in api/Dockerfile</text>
+  </g>
+</svg>
