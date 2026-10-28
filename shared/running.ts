@@ -8,6 +8,7 @@ export interface RunningItem {
   title: string;
   provider: string;
   model: string | null;
+  workspaceId: string | null;
   project: string;
   workspace: string;
   startedAt: string;
@@ -47,6 +48,7 @@ export async function collectRunning(paseo: PaseoApi): Promise<Omit<RunningItem,
     title: agent.title ?? agent.id.slice(0, 8),
     provider: agent.provider,
     model: agent.model,
+    workspaceId: agent.workspaceId ?? null,
     project: ws?.project ?? "",
     workspace: ws?.workspace ?? "",
     startedAt: background ? agent.updatedAt : (agent.activeTurn?.startedAt ?? agent.lastUserMessageAt ?? agent.updatedAt),

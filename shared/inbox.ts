@@ -11,6 +11,7 @@ export interface InboxItem {
   title: string;
   provider: string;
   projectId: string | null;
+  workspaceId: string | null;
   project: string;
   workspace: string;
   at: string | null;
@@ -65,6 +66,7 @@ export async function collectInbox(paseo: PaseoApi): Promise<Omit<InboxItem, "ho
       title: agent.title ?? agent.id.slice(0, 8),
       provider: agent.provider,
       projectId: ws?.projectId ?? null,
+      workspaceId: agent.workspaceId ?? null,
       project: ws?.project ?? "",
       workspace: ws?.workspace ?? "",
       at: agent.attentionTimestamp ?? (agent.pendingPermissions.length > 0 ? agent.updatedAt : null),

@@ -59,6 +59,18 @@ function Btn({ theme, label, tone = "plain", disabled, onPress }: {
   );
 }
 
+function OpenButtons<T extends { hostId: string; workspaceId: string | null }>({ theme, item, onOpen, onOpenWorkspace }: {
+  theme: PluginTheme; item: T; onOpen?: (item: T) => void; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+}) {
+  const ws = item.workspaceId;
+  return (
+    <>
+      {onOpen ? <Btn theme={theme} label="Open agent" tone="pri" onPress={() => onOpen(item)} /> : null}
+      {onOpenWorkspace && ws ? <Btn theme={theme} label="Open workspace" tone="pri" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
+    </>
+  );
+}
+
 interface CardProps {
   theme: PluginTheme;
   item: InboxItem;
@@ -69,11 +81,12 @@ interface CardProps {
   compact: boolean;
   onAnswer: (item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) => void;
   onOpen?: (item: InboxItem) => void;
+  onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
 }
 
 // One hairline-separated row. Wide: status dot, title, meta, age and buttons on one line.
 // Compact (phone): title + age, then meta + button; a permission request stacks its buttons below.
-function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onOpen }: CardProps) {
+function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onOpen, onOpenWorkspace }: CardProps) {
   const [always, setAlways] = useState(false);
   const req = item.request;
   const c = theme.colors;
@@ -97,7 +110,7 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
     </Text>
   );
   const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{age(item.at)}</Text>;
-  const open = onOpen ? <Btn theme={theme} label="Open agent" tone="pri" onPress={() => onOpen(item)} /> : null;
+  const open = <OpenButtons theme={theme} item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
   const answers = req ? (
     <>
       {customActions.length > 0
@@ -185,7 +198,10 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
 }
 
 // Copy of paseo-running's card, minus "needs you": those agents are already in the queue above.
-function RunningRow({ theme, item, now, compact, onOpen }: { theme: PluginTheme; item: RunningItem; now: number; compact: boolean; onOpen?: (item: RunningItem) => void }) {
+function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
+  theme: PluginTheme; item: RunningItem; now: number; compact: boolean;
+  onOpen?: (item: RunningItem) => void; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+}) {
   const c = theme.colors;
   const quiet = (now - Date.parse(item.updatedAt)) / 60_000 >= QUIET_MIN;
   const dot = <View accessibilityLabel="running" style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: INDIGO }} />;
@@ -201,7 +217,7 @@ function RunningRow({ theme, item, now, compact, onOpen }: { theme: PluginTheme;
     </Text>
   );
   const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{span(item.startedAt, now)}</Text>;
-  const open = onOpen ? <Btn theme={theme} label="Open agent" tone="pri" onPress={() => onOpen(item)} /> : null;
+  const open = <OpenButtons theme={theme} item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
   const update = (
     <Text style={{ color: quiet ? c.statusWarning : c.foregroundMuted, fontSize: FS.small, marginLeft: compact ? 19 : 21 }}>
       {item.model ? `${item.model} · ` : ""}last update {span(item.updatedAt, now)} ago{quiet ? " (quiet)" : ""}
@@ -309,6 +325,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   }
 
   const openAgent = navigation ? (item: InboxItem | RunningItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
+  const openWorkspace = navigation ? (workspaceId: string, serverId: string) => navigation.openWorkspace({ workspaceId, serverId }) : undefined;
   const pending = items.filter((i) => i.reason === "permission").length;
 
   return (
@@ -340,7 +357,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           <View>
             {items.map((item) => (
               <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
-                busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />
+                busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
             ))}
           </View>
         </>
@@ -352,7 +369,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
             Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, longest first</Text>
           </Text>
           <View>
-            {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
+            {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} onOpenWorkspace={openWorkspace} />)}
           </View>
         </>
       ) : null}
