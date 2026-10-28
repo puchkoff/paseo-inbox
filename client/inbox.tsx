@@ -367,7 +367,9 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
       {tab === "rules" ? <Rules theme={theme} hostLabel={host.label} /> : items.length === 0 ? (
-        <Text style={{ color: c.foregroundMuted, textAlign: "center", fontSize: FS.body, paddingVertical: 60 }}>{loaded ? "Nothing waiting on you." : "Loading…"}</Text>
+        <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
+          Waiting on you <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{loaded ? "none" : "loading…"}</Text>
+        </Text>
       ) : (
         <>
           <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
