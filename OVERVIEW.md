@@ -1,4 +1,4 @@
-Inbox puts everything that is waiting on you into one screen: tool permission requests, plans and questions from agents, and agents that finished or failed. Answer a request in one press, or open the agent.
+Inbox puts everything that is waiting on you into one screen: tool permission requests, plans and questions from agents, and agents that finished or failed. Answer a request in one press, or open the agent. Below the queue, a Running section lists agents that are working right now, longest first.
 
 It polls the daemon every couple of seconds, so a request shows up as soon as an agent asks. The sidebar row shows how many items are waiting.
 

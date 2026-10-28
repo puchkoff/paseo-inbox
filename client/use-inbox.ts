@@ -1,9 +1,12 @@
 import { getPaseoClient, useHosts } from "@getpaseo/plugin/client";
 import { useCallback, useEffect, useState } from "react";
 import { type InboxItem, collectInbox, sortInbox } from "../shared/inbox.ts";
+import { type RunningItem, collectRunning, sortRunning } from "../shared/running.ts";
 
 export interface InboxState {
   items: InboxItem[];
+  // Empty unless useInbox was asked for it; the sidebar badge doesn't need it.
+  running: RunningItem[];
   // Hosts that could not be read right now, e.g. "oleg: offline".
   problems: string[];
   loaded: boolean;
@@ -13,27 +16,35 @@ const HOST_TIMEOUT_MS = 8000;
 
 // Plain polling over every configured host. getPaseoClient borrows the app's own connection,
 // so the plugin does not need to be installed on the other daemons for them to show up.
-export function useInbox(pollMs: number): InboxState & { refresh: () => Promise<void> } {
+export function useInbox(pollMs: number, withRunning = false): InboxState & { refresh: () => Promise<void> } {
   const hosts = useHosts();
-  const [state, setState] = useState<InboxState>({ items: [], problems: [], loaded: false });
+  const [state, setState] = useState<InboxState>({ items: [], running: [], problems: [], loaded: false });
   const hostsKey = hosts.map((h) => `${h.serverId}:${h.status}`).join(",");
 
   const refresh = useCallback(async () => {
     // A request the app never answers must not keep every other host on "Loading…".
     const results = await Promise.all(
       hosts.map(async (h) => {
-        if (h.status !== "online") return { items: [] as InboxItem[], problem: `${h.label}: ${h.status}` };
+        const none = { items: [] as InboxItem[], running: [] as RunningItem[] };
+        if (h.status !== "online") return { ...none, problem: `${h.label}: ${h.status}` };
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(() => reject(new Error("no answer")), HOST_TIMEOUT_MS);
           });
-          const items = (await Promise.race([collectInbox(getPaseoClient(h.serverId)), timeout])).map((i) => ({
-            ...i, hostId: h.serverId, hostLabel: h.label, key: `${h.serverId}:${i.key}`,
-          }));
-          return { items, problem: null };
+          const paseo = getPaseoClient(h.serverId);
+          const [inbox, running] = await Promise.race([
+            Promise.all([collectInbox(paseo), withRunning ? collectRunning(paseo) : Promise.resolve([])]),
+            timeout,
+          ]);
+          const host = { hostId: h.serverId, hostLabel: h.label };
+          return {
+            items: inbox.map((i) => ({ ...i, ...host, key: `${h.serverId}:${i.key}` })),
+            running: running.map((i) => ({ ...i, ...host, key: `${h.serverId}:${i.key}` })),
+            problem: null,
+          };
         } catch (e) {
-          return { items: [] as InboxItem[], problem: `${h.label}: ${e instanceof Error ? e.message : String(e)}` };
+          return { ...none, problem: `${h.label}: ${e instanceof Error ? e.message : String(e)}` };
         } finally {
           clearTimeout(timer);
         }
@@ -41,12 +52,13 @@ export function useInbox(pollMs: number): InboxState & { refresh: () => Promise<
     );
     setState({
       items: sortInbox(results.flatMap((r) => r.items)),
+      running: sortRunning(results.flatMap((r) => r.running)),
       problems: results.flatMap((r) => (r.problem ? [r.problem] : [])),
       loaded: true,
     });
     // hostsKey covers hosts; the array identity changes every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostsKey]);
+  }, [hostsKey, withRunning]);
 
   useEffect(() => {
     void refresh();

@@ -4,7 +4,7 @@
 
 One screen for everything waiting on you, with auto-rules for permission requests.
 
-Collects tool permission requests, plans and questions from agents, and agents that finished or failed. Answer in one press or open the agent. Polls every couple of seconds; the sidebar row shows the count.
+Collects tool permission requests, plans and questions from agents, and agents that finished or failed. Answer in one press or open the agent. A Running section below the queue lists working agents. Polls every couple of seconds; the sidebar row shows the count.
 
 **Auto-rules:** ticking *Always allow this exact command* saves a per-project rule that matches the whole command string exactly. Destructive commands (`rm -rf`, `sudo`, `git push --force`, `terraform apply`, …) are never auto-allowed; that check is a pattern list, not a shell parser. Rules are stored in the plugin's host settings, shared by every client of that daemon. Plugins are unsandboxed, so review the Auto-rules tab now and then.
 

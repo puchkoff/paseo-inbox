@@ -2,9 +2,10 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { useHosts, useSettings } from "@getpaseo/plugin/client";
 import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { InboxItem } from "../shared/inbox.ts";
+import type { RunningItem } from "../shared/running.ts";
 import { type Rule, rulesSettings } from "../shared/rules.ts";
 import { answer, useInbox } from "./use-inbox.ts";
 
@@ -17,6 +18,15 @@ function age(iso: string | null): string {
   if (min < 1) return "now";
   if (min < 60) return `${min} min`;
   return min < 1440 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} d`;
+}
+
+const QUIET_MIN = 10;
+
+function span(fromIso: string, now: number): string {
+  const min = Math.max(0, Math.round((now - Date.parse(fromIso)) / 60_000));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min`;
+  return min < 1440 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${Math.round(min / 1440)} d`;
 }
 
 // Hairline design: fixed indigo so buttons stay readable on light and dark themes.
@@ -174,6 +184,61 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
   );
 }
 
+// Copy of paseo-running's card, minus "needs you": those agents are already in the queue above.
+function RunningRow({ theme, item, now, compact, onOpen }: { theme: PluginTheme; item: RunningItem; now: number; compact: boolean; onOpen?: (item: RunningItem) => void }) {
+  const c = theme.colors;
+  const quiet = (now - Date.parse(item.updatedAt)) / 60_000 >= QUIET_MIN;
+  const dot = <View accessibilityLabel="running" style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: INDIGO }} />;
+  const title = (
+    <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", flexShrink: 1 }} numberOfLines={compact ? 2 : 1}>
+      {item.title}
+      {item.background ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{"  background tasks"}</Text> : null}
+    </Text>
+  );
+  const meta = (
+    <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
+      {[item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
+    </Text>
+  );
+  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{span(item.startedAt, now)}</Text>;
+  const open = onOpen ? <Btn theme={theme} label="Open agent" tone="pri" onPress={() => onOpen(item)} /> : null;
+  const update = (
+    <Text style={{ color: quiet ? c.statusWarning : c.foregroundMuted, fontSize: FS.small, marginLeft: compact ? 19 : 21 }}>
+      {item.model ? `${item.model} · ` : ""}last update {span(item.updatedAt, now)} ago{quiet ? " (quiet)" : ""}
+    </Text>
+  );
+  const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border, gap: 3 } as const;
+
+  if (compact) {
+    return (
+      <View style={frame}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+          <View style={{ paddingTop: 7 }}>{dot}</View>
+          <View style={{ flex: 1 }}>{title}</View>
+          {time}
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 19 }}>
+          {meta}
+          {open}
+        </View>
+        {update}
+      </View>
+    );
+  }
+  return (
+    <View style={frame}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {dot}
+        {title}
+        {meta}
+        {time}
+        {open}
+      </View>
+      {update}
+    </View>
+  );
+}
+
 function Rules({ theme, hostLabel }: { theme: PluginTheme; hostLabel: string }) {
   const settings = useSettings(rulesSettings);
   const c = theme.colors;
@@ -206,13 +271,21 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const toast = useToast();
   const [tab, setTab] = useState<"queue" | "rules">("queue");
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const { items: allItems, problems, loaded, refresh } = useInbox(2000);
+  const { items: allItems, running: allRunning, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
   const [chosen, setChosen] = useState(host.id);
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
   const items = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id).length;
+  const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
+
+  // Re-render each 15 s so the elapsed times advance between polls.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(t);
+  }, []);
 
   async function respond(item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) {
     setBusyKey(item.key);
@@ -235,7 +308,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
     }
   }
 
-  const openAgent = navigation ? (item: InboxItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
+  const openAgent = navigation ? (item: InboxItem | RunningItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
   const pending = items.filter((i) => i.reason === "permission").length;
 
   return (
@@ -272,6 +345,17 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           </View>
         </>
       )}
+
+      {tab === "queue" && running.length > 0 ? (
+        <>
+          <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
+            Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, longest first</Text>
+          </Text>
+          <View>
+            {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
+          </View>
+        </>
+      ) : null}
     </ScrollView>
   );
 }
