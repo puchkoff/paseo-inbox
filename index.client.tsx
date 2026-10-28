@@ -1,13 +1,15 @@
 import type { PluginClientContext, PluginSidebarItemProps } from "@getpaseo/plugin/client";
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { SidebarRow } from "@getpaseo/plugin/client/ui";
 import { Text, View } from "react-native";
 import { InboxScreen } from "./client/inbox.tsx";
 import { useInbox } from "./client/use-inbox.ts";
 
-function Badge({ count, color, fg }: { count: number; color: string; fg: string }) {
+function Badge({ count, icon, label, color, fg }: { count: number; icon: string; label: string; color: string; fg: string }) {
   if (count === 0) return null;
   return (
-    <View style={{ backgroundColor: color, borderRadius: 999, paddingHorizontal: 7 }}>
+    <View accessibilityLabel={`${count} ${label}`} style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: color, borderRadius: 999, paddingHorizontal: 7 }}>
+      <Icon name={icon} size={12} color={fg} />
       <Text style={{ color: fg, fontSize: 13, fontWeight: "700" }}>{count}</Text>
     </View>
   );
@@ -25,8 +27,8 @@ function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps)
       onPress={() => openScreen({ screenId: "inbox" })}
       trailing={items.length > 0 || working > 0 ? (
         <View style={{ flexDirection: "row", gap: 4, marginRight: 8 }}>
-          <Badge count={items.length} color={c.statusWarning} fg={c.accentForeground} />
-          <Badge count={working} color={c.accent} fg={c.accentForeground} />
+          <Badge count={items.length} icon="Hourglass" label="waiting on you" color={c.statusWarning} fg={c.accentForeground} />
+          <Badge count={working} icon="Activity" label="running" color={c.accent} fg={c.accentForeground} />
         </View>
       ) : null}
     />
