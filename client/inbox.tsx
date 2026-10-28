@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { useHosts, useSettings } from "@getpaseo/plugin/client";
-import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
+import { Icon, ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { InboxItem } from "../shared/inbox.ts";
@@ -59,15 +59,29 @@ function Btn({ theme, label, tone = "plain", disabled, onPress }: {
   );
 }
 
-function OpenButtons<T extends { hostId: string; workspaceId: string | null }>({ theme, item, onOpen, onOpenWorkspace }: {
-  theme: PluginTheme; item: T; onOpen?: (item: T) => void; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+function OpenButtons<T extends { hostId: string; workspaceId: string | null }>({ item, onOpen, onOpenWorkspace }: {
+  item: T; onOpen?: (item: T) => void; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
 }) {
   const ws = item.workspaceId;
   return (
     <>
-      {onOpen ? <Btn theme={theme} label="Open agent" tone="pri" onPress={() => onOpen(item)} /> : null}
-      {onOpenWorkspace && ws ? <Btn theme={theme} label="Open workspace" tone="pri" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
+      {onOpen ? <IconBtn icon="Bot" label="Open agent" onPress={() => onOpen(item)} /> : null}
+      {onOpenWorkspace && ws ? <IconBtn icon="FolderOpen" label="Open workspace" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
     </>
+  );
+}
+
+// Square outlined icon button; label goes to screen readers.
+function IconBtn({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={{ padding: 5, borderRadius: 8, borderWidth: 1, borderColor: `${INDIGO}73` }}
+    >
+      <Icon name={icon} size={18} color={INDIGO} />
+    </Pressable>
   );
 }
 
@@ -104,13 +118,14 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
       {item.reason === "error" ? <Text style={{ color: c.statusDanger, fontSize: FS.small, fontWeight: "400" }}>{"  error"}</Text> : null}
     </Text>
   );
+  const info = [item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
   const meta = (
     <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
-      {[item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
+      {info}
     </Text>
   );
-  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{age(item.at)}</Text>;
-  const open = <OpenButtons theme={theme} item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
+  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flexShrink: 0 }} numberOfLines={1}>{age(item.at)}</Text>;
+  const open = <OpenButtons item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
   const answers = req ? (
     <>
       {customActions.length > 0
@@ -157,7 +172,7 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
     </View>
   ) : null;
 
-  const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: req?.risky ? c.statusDanger : c.border } as const;
+  const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: req?.risky ? c.statusDanger : c.border, gap: 3 } as const;
 
   if (compact) {
     return (
@@ -186,12 +201,12 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
     <View style={frame}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         {dot}
-        {title}
-        {meta}
+        <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
         {time}
         {req ? answers : open}
         {alwaysBox}
       </View>
+      <Text style={{ color: c.foregroundMuted, fontSize: FS.small, marginLeft: 21 }} numberOfLines={1}>{info}</Text>
       {detail}
     </View>
   );
@@ -211,16 +226,19 @@ function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
       {item.background ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{"  background tasks"}</Text> : null}
     </Text>
   );
+  const info = [item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
   const meta = (
     <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
-      {[item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ")}
+      {info}
     </Text>
   );
-  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{span(item.startedAt, now)}</Text>;
-  const open = <OpenButtons theme={theme} item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
+  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flexShrink: 0 }} numberOfLines={1}>{span(item.startedAt, now)}</Text>;
+  const open = <OpenButtons item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
+  // Wide rows carry host/project here; compact rows show them beside the buttons.
   const update = (
-    <Text style={{ color: quiet ? c.statusWarning : c.foregroundMuted, fontSize: FS.small, marginLeft: compact ? 19 : 21 }}>
-      {item.model ? `${item.model} · ` : ""}last update {span(item.updatedAt, now)} ago{quiet ? " (quiet)" : ""}
+    <Text style={{ color: c.foregroundMuted, fontSize: FS.small, marginLeft: compact ? 19 : 21 }} numberOfLines={1}>
+      {[compact ? "" : info, item.model ?? ""].filter(Boolean).map((t) => `${t} · `).join("")}
+      <Text style={{ color: quiet ? c.statusWarning : c.foregroundMuted }}>last update {span(item.updatedAt, now)} ago{quiet ? " (quiet)" : ""}</Text>
     </Text>
   );
   const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border, gap: 3 } as const;
@@ -245,8 +263,7 @@ function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
     <View style={frame}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         {dot}
-        {title}
-        {meta}
+        <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
         {time}
         {open}
       </View>
@@ -353,7 +370,11 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         <Text style={{ color: c.foregroundMuted, textAlign: "center", fontSize: FS.body, paddingVertical: 60 }}>{loaded ? "Nothing waiting on you." : "Loading…"}</Text>
       ) : (
         <>
-          {pending > 0 ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{pending} permission request{pending === 1 ? "" : "s"}, oldest first</Text> : null}
+          <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
+            Waiting on you <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>
+              {items.length} {pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "finished or failed, newest first"}
+            </Text>
+          </Text>
           <View>
             {items.map((item) => (
               <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
