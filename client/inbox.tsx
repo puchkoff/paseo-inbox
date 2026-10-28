@@ -66,7 +66,7 @@ function OpenButtons<T extends { hostId: string; workspaceId: string | null }>({
   return (
     <>
       {onOpen ? <IconBtn icon="Bot" label="Open agent" onPress={() => onOpen(item)} /> : null}
-      {onOpenWorkspace && ws ? <IconBtn icon="FolderOpen" label="Open workspace" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
+      {onOpenWorkspace && ws ? <IconBtn icon="AppWindow" label="Open workspace" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
     </>
   );
 }
