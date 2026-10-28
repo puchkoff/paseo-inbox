@@ -5,7 +5,7 @@ import { type RunningItem, collectRunning, sortRunning } from "../shared/running
 
 export interface InboxState {
   items: InboxItem[];
-  // Empty unless useInbox was asked for it; the sidebar badge doesn't need it.
+  // Empty unless useInbox was asked for it.
   running: RunningItem[];
   // Hosts that could not be read right now, e.g. "oleg: offline".
   problems: string[];
