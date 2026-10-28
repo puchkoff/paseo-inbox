@@ -389,7 +389,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       {tab === "queue" && running.length > 0 ? (
         <>
           <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
-            Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, longest first</Text>
+            Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, newest first</Text>
           </Text>
           <View>
             {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} onOpenWorkspace={openWorkspace} />)}

@@ -42,7 +42,7 @@ test("an idle agent in a working workspace is listed as background; a running on
   assert.deepEqual(both.map((i) => [i.agentId, i.background]), [["r", false]]);
 });
 
-test("sort: longest-running first", () => {
+test("sort: newest first", () => {
   const r = sortRunning([{ startedAt: "3" }, { startedAt: "1" }, { startedAt: "2" }]);
-  assert.deepEqual(r.map((i) => i.startedAt), ["1", "2", "3"]);
+  assert.deepEqual(r.map((i) => i.startedAt), ["3", "2", "1"]);
 });

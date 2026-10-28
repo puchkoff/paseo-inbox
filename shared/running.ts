@@ -74,7 +74,7 @@ export async function collectRunning(paseo: PaseoApi): Promise<Omit<RunningItem,
   return items;
 }
 
-// Longest-running first.
+// Newest first.
 export function sortRunning<T extends Pick<RunningItem, "startedAt">>(items: T[]): T[] {
-  return items.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  return items.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
