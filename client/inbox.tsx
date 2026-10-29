@@ -306,6 +306,7 @@ function WorkspaceLine({ theme, row, color, onOpenWorkspace }: {
 
 declare const localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void } | undefined;
 const COLLAPSED_KEY = "paseo-inbox:collapsed";
+const WS_PAGE = 20;
 type SectionId = "waiting" | "running" | "done" | "archive";
 const HOST_KEY = "paseo-inbox:host";
 
@@ -360,6 +361,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const [view, setView] = useState<"agents" | "workspaces">("agents");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [collapsed, toggle] = useCollapsed();
+  const [wsTarget, setWsTarget] = useState(WS_PAGE);
   const { items: allItems, running: allRunning, done: allDone, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
@@ -400,6 +402,13 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const openWorkspace = navigation ? (workspaceId: string, serverId: string) => navigation.openWorkspace({ workspaceId, serverId }) : undefined;
   const pending = items.filter((i) => i.reason === "permission").length;
   const byWs = view === "workspaces";
+  // Workspaces view: archived agents cluster in few workspaces, so keep loading until the page has wsTarget rows.
+  const archiveWs = groupByWorkspace(archive.items).length;
+  // New scope starts from an empty archive, so start the target over too.
+  useEffect(() => setWsTarget(WS_PAGE), [scope]);
+  useEffect(() => {
+    if (byWs && !collapsed.has("archive") && archive.items.length > 0 && archive.more && !archive.loading && !archive.error && archiveWs < wsTarget) archive.loadMore();
+  }, [byWs, collapsed, archive, archiveWs, wsTarget]);
   const wsRows = (list: Parameters<typeof groupByWorkspace>[0], color: string) =>
     groupByWorkspace(list).map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} color={color} onOpenWorkspace={openWorkspace} />);
 
@@ -445,14 +454,14 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       </Section>
 
       <Section theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
-        note={archive.items.length ? `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"}>
+        note={archive.items.length ? byWs ? `${archiveWs}${archive.more ? "+" : ""} workspaces, newest first` : `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"}>
         {byWs ? wsRows(archive.items, c.foregroundMuted) : archive.items.map((item) => (
           <Card key={item.key} theme={theme} item={item} busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} />
         ))}
         {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, margin: 8 }}>Not loaded: {archive.error}</Text> : null}
         {archive.more && archive.items.length > 0 ? (
           <View style={{ alignItems: "flex-start", padding: 8 }}>
-            <Btn theme={theme} label={archive.loading ? "Loading…" : "Load more"} disabled={archive.loading} onPress={archive.loadMore} />
+            <Btn theme={theme} label={archive.loading || (byWs && archiveWs < wsTarget && !archive.error) ? "Loading…" : "Load more"} disabled={archive.loading || (byWs && archiveWs < wsTarget && !archive.error)} onPress={byWs ? () => setWsTarget(archiveWs + WS_PAGE) : archive.loadMore} />
           </View>
         ) : null}
       </Section>
