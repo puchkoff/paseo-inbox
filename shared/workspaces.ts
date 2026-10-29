@@ -1,31 +1,27 @@
-import type { InboxItem } from "./inbox.ts";
-import type { RunningItem } from "./running.ts";
-
 export interface WorkspaceRow {
   key: string;
   hostId: string;
   hostLabel: string;
-  workspaceId: string;
+  // null: the workspace is archived, so there is nothing to open.
+  workspaceId: string | null;
   project: string;
   workspace: string;
-  waiting: number;
-  running: number;
+  agents: number;
 }
 
-// One row per host + workspace, waiting first. Agents without a workspace have nothing to open, so they are skipped.
-export function groupByWorkspace(items: InboxItem[], running: RunningItem[]): WorkspaceRow[] {
+type Groupable = { hostId: string; hostLabel: string; workspaceId: string | null; project: string; workspace: string };
+
+// One row per host + workspace, in the order the list already has. Agents of an archived workspace
+// (workspaceId null) group by their workspace name; with no name either there is nothing to show.
+export function groupByWorkspace(list: Groupable[]): WorkspaceRow[] {
   const rows = new Map<string, WorkspaceRow>();
-  const add = (i: InboxItem | RunningItem, field: "waiting" | "running") => {
-    if (!i.workspaceId) return;
-    const key = `${i.hostId}:${i.workspaceId}`;
-    let row = rows.get(key);
-    if (!row) {
-      row = { key, hostId: i.hostId, hostLabel: i.hostLabel, workspaceId: i.workspaceId, project: i.project, workspace: i.workspace, waiting: 0, running: 0 };
-      rows.set(key, row);
-    }
-    row[field]++;
-  };
-  for (const i of items) add(i, "waiting");
-  for (const i of running) add(i, "running");
-  return [...rows.values()].sort((a, b) => b.waiting - a.waiting || b.running - a.running || a.project.localeCompare(b.project));
+  for (const i of list) {
+    const id = i.workspaceId ?? (i.workspace ? `name:${i.workspace}` : null);
+    if (!id) continue;
+    const key = `${i.hostId}:${id}`;
+    const row = rows.get(key);
+    if (row) row.agents++;
+    else rows.set(key, { key, hostId: i.hostId, hostLabel: i.hostLabel, workspaceId: i.workspaceId, project: i.project, workspace: i.workspace, agents: 1 });
+  }
+  return [...rows.values()];
 }

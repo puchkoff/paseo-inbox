@@ -146,7 +146,7 @@ export async function collectArchive(paseo: PaseoApi, cursor?: string): Promise<
       if (!a.archivedAt && !(a.workspaceId && !ws)) continue;
       items.push({
         key: `${a.id}:archived`, agentId: a.id, title: a.title ?? a.id.slice(0, 8), provider: a.provider,
-        projectId: ws?.projectId ?? null, workspaceId: ws ? a.workspaceId ?? null : null, project: ws?.project ?? "", workspace: ws?.workspace ?? "",
+        projectId: ws?.projectId ?? null, workspaceId: ws ? a.workspaceId ?? null : null, project: ws?.project ?? "", workspace: ws?.workspace ?? (a.cwd.split("/").filter(Boolean).pop() ?? ""),
         at: a.archivedAt ?? a.updatedAt, reason: "archived", request: null,
       });
     }

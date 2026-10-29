@@ -285,18 +285,20 @@ function RunningRow({ theme, item, now, compact, onOpen }: {
   );
 }
 
-function WorkspaceLine({ theme, row, onOpenWorkspace }: {
-  theme: PluginTheme; row: WorkspaceRow; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+function WorkspaceLine({ theme, row, color, onOpenWorkspace }: {
+  theme: PluginTheme; row: WorkspaceRow; color: string; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
 }) {
   const c = theme.colors;
-  const counts = [row.waiting ? `${row.waiting} waiting` : "", row.running ? `${row.running} running` : ""].filter(Boolean).join(" · ");
+  const ws = row.workspaceId;
   return (
-    <Row label={`Open ${row.workspace || row.project}`} onPress={onOpenWorkspace ? () => onOpenWorkspace(row.workspaceId, row.hostId) : undefined}
-      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: c.border }}>
-      <View accessibilityLabel={row.waiting ? "waiting" : "running"} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: row.waiting ? c.statusWarning : INDIGO }} />
+    <Row label={`Open ${row.workspace || row.project}`} onPress={onOpenWorkspace && ws ? () => onOpenWorkspace(ws, row.hostId) : undefined}
+      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: c.border }}>
+      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color }} />
       <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
         <Text style={{ color: c.foreground, fontSize: ROW.title, fontWeight: "600" }} numberOfLines={1}>{row.workspace || row.project}</Text>
-        <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta }} numberOfLines={1}><Host item={row} />{` · ${row.project} · ${counts}`}</Text>
+        <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta }} numberOfLines={1}>
+          <Host item={row} />{[row.project, `${row.agents} agent${row.agents === 1 ? "" : "s"}`, ws ? "" : "workspace archived"].filter(Boolean).map((t) => ` · ${t}`).join("")}
+        </Text>
       </View>
     </Row>
   );
@@ -373,7 +375,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
-  const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], view === "agents" && !collapsed.has("archive"));
+  const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], !collapsed.has("archive"));
 
   // Re-render each 15 s so the elapsed times advance between polls.
   const [now, setNow] = useState(Date.now());
@@ -396,8 +398,10 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
   const openAgent = navigation ? (item: InboxItem | RunningItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
   const openWorkspace = navigation ? (workspaceId: string, serverId: string) => navigation.openWorkspace({ workspaceId, serverId }) : undefined;
-  const workspaces = groupByWorkspace(items, running);
   const pending = items.filter((i) => i.reason === "permission").length;
+  const byWs = view === "workspaces";
+  const wsRows = (list: Parameters<typeof groupByWorkspace>[0], color: string) =>
+    groupByWorkspace(list).map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} color={color} onOpenWorkspace={openWorkspace} />);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.surface0 }} contentContainerStyle={{ padding: layout.compact ? 16 : 24, gap: 12, maxWidth: 860, width: "100%", alignSelf: "center" }}>
@@ -424,43 +428,34 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
-      {view === "workspaces" ? (
-        <View>
-          {workspaces.length === 0 ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{loaded ? "No workspace has an agent waiting or running." : "loading…"}</Text> : null}
-          {workspaces.map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} onOpenWorkspace={openWorkspace} />)}
-        </View>
-      ) : (
-        <>
-          <Section theme={theme} title="Waiting on you" open={!collapsed.has("waiting")} onToggle={() => toggle("waiting")}
-            note={!loaded ? "loading…" : !items.length ? "none" : `${items.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
-            {items.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
-          </Section>
+      <Section theme={theme} title="Waiting on you" open={!collapsed.has("waiting")} onToggle={() => toggle("waiting")}
+        note={!loaded ? "loading…" : !items.length ? "none" : `${items.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
+        {byWs ? wsRows(items, c.statusWarning) : items.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
+      </Section>
 
-          {running.length > 0 ? (
-            <Section theme={theme} title="Running" note={`${running.length} working now, newest first`} open={!collapsed.has("running")} onToggle={() => toggle("running")}>
-              {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
-            </Section>
-          ) : null}
+      {running.length > 0 ? (
+        <Section theme={theme} title="Running" note={`${running.length} working now, newest first`} open={!collapsed.has("running")} onToggle={() => toggle("running")}>
+          {byWs ? wsRows(running, INDIGO) : running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
+        </Section>
+      ) : null}
 
-          <Section theme={theme} title="Done" open={!collapsed.has("done")} onToggle={() => toggle("done")}
-            note={!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"}>
-            {done.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
-          </Section>
+      <Section theme={theme} title="Done" open={!collapsed.has("done")} onToggle={() => toggle("done")}
+        note={!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"}>
+        {byWs ? wsRows(done, c.statusSuccess) : done.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
+      </Section>
 
-          <Section theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
-            note={archive.items.length ? `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"}>
-            {archive.items.map((item) => (
-              <Card key={item.key} theme={theme} item={item} busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} />
-            ))}
-            {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, margin: 8 }}>Not loaded: {archive.error}</Text> : null}
-            {archive.more && archive.items.length > 0 ? (
-              <View style={{ alignItems: "flex-start", padding: 8 }}>
-                <Btn theme={theme} label={archive.loading ? "Loading…" : "Load more"} disabled={archive.loading} onPress={archive.loadMore} />
-              </View>
-            ) : null}
-          </Section>
-        </>
-      )}
+      <Section theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
+        note={archive.items.length ? `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"}>
+        {byWs ? wsRows(archive.items, c.foregroundMuted) : archive.items.map((item) => (
+          <Card key={item.key} theme={theme} item={item} busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} />
+        ))}
+        {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, margin: 8 }}>Not loaded: {archive.error}</Text> : null}
+        {archive.more && archive.items.length > 0 ? (
+          <View style={{ alignItems: "flex-start", padding: 8 }}>
+            <Btn theme={theme} label={archive.loading ? "Loading…" : "Load more"} disabled={archive.loading} onPress={archive.loadMore} />
+          </View>
+        ) : null}
+      </Section>
     </ScrollView>
   );
 }

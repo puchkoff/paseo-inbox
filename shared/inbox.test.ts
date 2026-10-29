@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { collectArchive, collectDone, collectInbox, sortInbox } from "./inbox.ts";
 
 const agent = (over: Record<string, unknown>) => ({
-  id: "a1", title: "T", provider: "claude", workspaceId: "w1", updatedAt: "2026-01-01T00:00:00Z",
+  id: "a1", title: "T", provider: "claude", workspaceId: "w1", cwd: "/home/u/old-app", updatedAt: "2026-01-01T00:00:00Z",
   pendingPermissions: [], attentionReason: null, attentionTimestamp: null, ...over,
 });
 const fakeApi = (attention: unknown[], running: unknown[]) =>
@@ -78,7 +78,7 @@ test("archive pages until it has archived agents and keeps the cursor for Load m
     workspaces: { list: async () => ({ entries: [{ id: "w1", projectId: "p1", projectDisplayName: "app", name: "main" }] }) },
   } as never;
   const r = await collectArchive(api);
-  assert.deepEqual(r.items.map((i) => [i.agentId, i.workspaceId]), [["arch", "w1"], ["inGoneWs", null]]);
+  assert.deepEqual(r.items.map((i) => [i.agentId, i.workspaceId, i.workspace]), [["arch", "w1", "main"], ["inGoneWs", null, "old-app"]]);
   assert.deepEqual(cursors, [undefined, "c1"]);
   assert.equal(r.cursor, null);
 });
