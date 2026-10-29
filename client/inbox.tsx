@@ -22,6 +22,17 @@ function age(iso: string | null): string {
 
 const QUIET_MIN = 10;
 
+// Stable colour per host so rows from different daemons tell apart at a glance; mid tones read on light and dark.
+const HOST_COLORS = ["#2f80ed", "#d9480f", "#2b8a3e", "#ae3ec9", "#e8590c", "#0c8599", "#c2255c"];
+function hostColor(id: string): string {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return HOST_COLORS[Math.abs(h) % HOST_COLORS.length];
+}
+function Host({ item }: { item: { hostId: string; hostLabel: string } }) {
+  return <Text style={{ color: hostColor(item.hostId), fontWeight: "600" }}>{item.hostLabel}</Text>;
+}
+
 function span(fromIso: string, now: number): string {
   const min = Math.max(0, Math.round((now - Date.parse(fromIso)) / 60_000));
   if (min < 1) return "just now";
@@ -118,7 +129,8 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
       {item.reason === "error" ? <Text style={{ color: c.statusDanger, fontSize: FS.small, fontWeight: "400" }}>{"  error"}</Text> : null}
     </Text>
   );
-  const info = [item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
+  const rest = [item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
+  const info = <><Host item={item} />{rest ? ` · ${rest}` : ""}</>;
   const meta = (
     <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
       {info}
@@ -226,7 +238,8 @@ function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
       {item.background ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{"  background tasks"}</Text> : null}
     </Text>
   );
-  const info = [item.hostLabel, item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
+  const rest = [item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
+  const info = <><Host item={item} />{rest ? ` · ${rest}` : ""}</>;
   const meta = (
     <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
       {info}
@@ -237,7 +250,8 @@ function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
   // Wide rows carry host/project here; compact rows show them beside the buttons.
   const update = (
     <Text style={{ color: c.foregroundMuted, fontSize: FS.small, marginLeft: compact ? 19 : 21 }} numberOfLines={1}>
-      {[compact ? "" : info, item.model ?? ""].filter(Boolean).map((t) => `${t} · `).join("")}
+      {compact ? null : <>{info} · </>}
+      {item.model ? `${item.model} · ` : ""}
       <Text style={{ color: quiet ? c.statusWarning : c.foregroundMuted }}>last update {span(item.updatedAt, now)} ago{quiet ? " (quiet)" : ""}</Text>
     </Text>
   );
