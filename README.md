@@ -4,7 +4,7 @@
 
 One screen for everything waiting on you, what is running, and what just finished.
 
-Collects tool permission requests, plans and questions from agents, and agents that failed. Answer in one press or open the agent. Below, Running lists working agents and Done lists agents that finished in the last 24 hours. Polls every couple of seconds; the sidebar row shows the count.
+Collects tool permission requests, plans and questions from agents, and agents that failed. Answer in one press or open the agent. Below, Running lists working agents and Done lists agents that finished in the last 24 hours, and Archive (collapsed, Load more) lists archived ones. Polls every couple of seconds; the sidebar row shows the count.
 
 ## Install
 

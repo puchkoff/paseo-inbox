@@ -8,7 +8,7 @@ import type { InboxItem } from "../shared/inbox.ts";
 import type { RunningItem } from "../shared/running.ts";
 import { initials } from "../shared/hosts.ts";
 import { groupByWorkspace, type WorkspaceRow } from "../shared/workspaces.ts";
-import { answer, useInbox } from "./use-inbox.ts";
+import { answer, useArchive, useInbox } from "./use-inbox.ts";
 
 // One scale for the whole screen. 26/17/15/13.5 read too small, 29/19/17/15 too big.
 const FS = { title: 27, body: 18, small: 16, tiny: 14 };
@@ -158,6 +158,7 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }:
   const status =
     item.reason === "permission" ? { color: c.statusWarning, label: req?.kind ?? "permission" }
     : item.reason === "error" ? { color: c.statusDanger, label: "error" }
+    : item.reason === "archived" ? { color: c.foregroundMuted, label: "archived" }
     : { color: c.statusSuccess, label: "finished" };
   const customActions = req?.actions ?? [];
 
@@ -324,13 +325,22 @@ function WorkspaceLine({ theme, row, onOpenWorkspace }: {
 
 declare const localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void } | undefined;
 const COLLAPSED_KEY = "paseo-inbox:collapsed";
-type SectionId = "waiting" | "running" | "done";
+type SectionId = "waiting" | "running" | "done" | "archive";
+const HOST_KEY = "paseo-inbox:host";
+
+function stored(key: string): string | null {
+  try { return localStorage?.getItem(key) ?? null; } catch { return null; }
+}
+function store(key: string, value: string) {
+  try { localStorage?.setItem(key, value); } catch { /* private mode: keep in memory */ }
+}
 
 // Collapsed sections survive reloads on web; native has no localStorage and starts expanded.
 function useCollapsed(): [Set<SectionId>, (id: SectionId) => void] {
   const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => {
     try {
-      return new Set(JSON.parse(localStorage?.getItem(COLLAPSED_KEY) ?? "[]"));
+      // Archive starts collapsed: it is long and loads on demand.
+      return new Set(JSON.parse(stored(COLLAPSED_KEY) ?? '["archive"]'));
     } catch {
       return new Set();
     }
@@ -338,7 +348,7 @@ function useCollapsed(): [Set<SectionId>, (id: SectionId) => void] {
   const toggle = (id: SectionId) => setCollapsed((prev) => {
     const next = new Set(prev);
     if (!next.delete(id)) next.add(id);
-    try { localStorage?.setItem(COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* private mode: keep in memory */ }
+    store(COLLAPSED_KEY, JSON.stringify([...next]));
     return next;
   });
   return [collapsed, toggle];
@@ -369,7 +379,9 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const { items: allItems, running: allRunning, done: allDone, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
-  const [chosen, setChosen] = useState(host.id);
+  // Last picked tile wins; the app's selected daemon is the default.
+  const [chosen, pick] = useState(() => stored(HOST_KEY) ?? host.id);
+  const setChosen = (id: string) => { pick(id); store(HOST_KEY, id); };
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
   const scoped = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
   // Finished agents are in Done (below); Waiting keeps permission requests and errors.
@@ -379,6 +391,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
+  const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], view === "agents" && !collapsed.has("archive"));
 
   // Re-render each 15 s so the elapsed times advance between polls.
   const [now, setNow] = useState(Date.now());
@@ -466,6 +479,23 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
                 <Card key={item.key} theme={theme} item={item}
                   busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
               ))}
+            </View>
+          )}
+
+          <SectionHeader theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
+            note={archive.items.length ? `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"} />
+          {collapsed.has("archive") ? null : (
+            <View>
+              {archive.items.map((item) => (
+                <Card key={item.key} theme={theme} item={item}
+                  busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
+              ))}
+              {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, marginTop: 6 }}>Not loaded: {archive.error}</Text> : null}
+              {archive.more && archive.items.length > 0 ? (
+                <View style={{ alignItems: "flex-start", marginTop: 10 }}>
+                  <Btn theme={theme} label={archive.loading ? "Loading…" : "Load more"} disabled={archive.loading} onPress={archive.loadMore} />
+                </View>
+              ) : null}
             </View>
           )}
         </>

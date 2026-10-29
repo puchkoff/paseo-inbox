@@ -1,6 +1,6 @@
 import { getPaseoClient, useHosts } from "@getpaseo/plugin/client";
-import { useCallback, useEffect, useState } from "react";
-import { type InboxItem, collectDone, collectInbox, sortInbox } from "../shared/inbox.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type InboxItem, collectArchive, collectDone, collectInbox, sortInbox } from "../shared/inbox.ts";
 import { type RunningItem, collectRunning, sortRunning } from "../shared/running.ts";
 
 export interface InboxState {
@@ -75,6 +75,71 @@ export function useInbox(pollMs: number, withRunning = false): InboxState & { re
   }, [refresh, pollMs]);
 
   return { ...state, refresh };
+}
+
+export interface ArchiveState {
+  items: InboxItem[];
+  // A host stays in `more` while it may have older archived agents.
+  more: boolean;
+  loading: boolean;
+  error: string | null;
+}
+
+// Archived agents of the given hosts, loaded on demand (not polled): the first page when `enabled` turns on, then loadMore().
+export function useArchive(hostIds: string[], enabled: boolean): ArchiveState & { loadMore: () => void } {
+  const hosts = useHosts();
+  const key = hostIds.join(",");
+  const [state, setState] = useState<ArchiveState & { cursors: Map<string, string | null | undefined> }>(
+    { items: [], more: true, loading: false, error: null, cursors: new Map() },
+  );
+  const [busy, setBusy] = useState(false);
+  const keyRef = useRef(key);
+
+  // Scope changed: start over.
+  useEffect(() => {
+    keyRef.current = key;
+    setState({ items: [], more: true, loading: false, error: null, cursors: new Map() });
+  }, [key]);
+
+  const loadMore = useCallback(() => {
+    if (busy) return;
+    setBusy(true);
+    setState((s) => ({ ...s, loading: true, error: null }));
+    void (async () => {
+      const cursors = new Map(state.cursors);
+      const fresh: InboxItem[] = [];
+      const errors: string[] = [];
+      await Promise.all(hostIds.map(async (id) => {
+        const h = hosts.find((x) => x.serverId === id);
+        // undefined = not started, null = exhausted.
+        if (!h || h.status !== "online" || cursors.get(id) === null) return;
+        try {
+          const r = await collectArchive(getPaseoClient(id), cursors.get(id) ?? undefined);
+          cursors.set(id, r.cursor);
+          fresh.push(...r.items.map((i) => ({ ...i, hostId: id, hostLabel: h.label, key: `${id}:${i.key}` })));
+        } catch (e) {
+          errors.push(`${h.label}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }));
+      setBusy(false);
+      // The user picked another host meanwhile: these pages belong to the old scope.
+      if (keyRef.current !== key) return;
+      setState((s) => ({
+        items: [...s.items, ...fresh].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? "")),
+        more: hostIds.some((id) => cursors.get(id) !== null),
+        loading: false,
+        error: errors.length ? errors.join(" · ") : null,
+        cursors,
+      }));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, key, state.cursors, hosts]);
+
+  useEffect(() => {
+    if (enabled && state.items.length === 0 && state.cursors.size === 0 && !busy) loadMore();
+  }, [enabled, state.items.length, state.cursors.size, busy, loadMore]);
+
+  return { items: state.items, more: state.more, loading: state.loading, error: state.error, loadMore };
 }
 
 export async function answer(

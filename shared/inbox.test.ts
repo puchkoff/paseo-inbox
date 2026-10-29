@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectDone, collectInbox, sortInbox } from "./inbox.ts";
+import { collectArchive, collectDone, collectInbox, sortInbox } from "./inbox.ts";
 
 const agent = (over: Record<string, unknown>) => ({
   id: "a1", title: "T", provider: "claude", workspaceId: "w1", updatedAt: "2026-01-01T00:00:00Z",
@@ -65,4 +65,20 @@ test("done lists recent idle agents newest first, skipping old, errored, blocked
     workspaces: { list: async () => ({ entries: [{ id: "w1", projectId: "p1", projectDisplayName: "app", name: "main" }] }) },
   } as never;
   assert.deepEqual((await collectDone(api, now)).map((i) => i.agentId), ["b", "a"]);
+});
+
+test("archive pages until it has archived agents and keeps the cursor for Load more", async () => {
+  const pages = [
+    { entries: [{ agent: agent({ id: "live" }) }, { agent: agent({ id: "arch", archivedAt: "2026-01-01T00:00:00Z" }) }], pageInfo: { hasMore: true, nextCursor: "c1" } },
+    { entries: [{ agent: agent({ id: "inGoneWs", workspaceId: "w9" }) }], pageInfo: { hasMore: false, nextCursor: null } },
+  ];
+  const cursors: unknown[] = [];
+  const api = {
+    agents: { list: async ({ page }: { page: { cursor?: string } }) => { cursors.push(page.cursor); return pages[cursors.length - 1] ?? { entries: [], pageInfo: { hasMore: false } }; } },
+    workspaces: { list: async () => ({ entries: [{ id: "w1", projectId: "p1", projectDisplayName: "app", name: "main" }] }) },
+  } as never;
+  const r = await collectArchive(api);
+  assert.deepEqual(r.items.map((i) => [i.agentId, i.workspaceId]), [["arch", "w1"], ["inGoneWs", null]]);
+  assert.deepEqual(cursors, [undefined, "c1"]);
+  assert.equal(r.cursor, null);
 });

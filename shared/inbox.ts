@@ -15,7 +15,7 @@ export interface InboxItem {
   project: string;
   workspace: string;
   at: string | null;
-  reason: "permission" | "finished" | "error";
+  reason: "permission" | "finished" | "error" | "archived";
   request: {
     id: string;
     kind: "tool" | "plan" | "question" | "mode" | "other";
@@ -123,6 +123,36 @@ export async function collectDone(paseo: PaseoApi, now = Date.now()): Promise<Om
         at: a.updatedAt, reason: "finished" as const, request: null,
       };
     });
+}
+
+const ARCHIVE_PAGE = 50;
+const ARCHIVE_WANT = 20;
+
+// One host's archived agents, newest first, from `cursor` on. The API has no archived-only filter, so this pages
+// through every agent until it has ARCHIVE_WANT archived ones; cursor is null once the host has no more.
+// An agent in an archived workspace counts as archived (its archivedAt stays null).
+export async function collectArchive(paseo: PaseoApi, cursor?: string): Promise<{ items: Omit<InboxItem, "hostId" | "hostLabel">[]; cursor: string | null }> {
+  const workspaces = await workspaceIndex(paseo);
+  const items: Omit<InboxItem, "hostId" | "hostLabel">[] = [];
+  let next: string | null = cursor ?? null;
+  do {
+    const page = await paseo.agents.list({
+      filter: { includeArchived: true },
+      sort: [{ key: "updated_at", direction: "desc" }],
+      page: { limit: ARCHIVE_PAGE, ...(next ? { cursor: next } : {}) },
+    });
+    for (const { agent: a } of page.entries) {
+      const ws = a.workspaceId ? workspaces.get(a.workspaceId) : undefined;
+      if (!a.archivedAt && !(a.workspaceId && !ws)) continue;
+      items.push({
+        key: `${a.id}:archived`, agentId: a.id, title: a.title ?? a.id.slice(0, 8), provider: a.provider,
+        projectId: ws?.projectId ?? null, workspaceId: ws ? a.workspaceId ?? null : null, project: ws?.project ?? "", workspace: ws?.workspace ?? "",
+        at: a.archivedAt ?? a.updatedAt, reason: "archived", request: null,
+      });
+    }
+    next = page.pageInfo.hasMore ? page.pageInfo.nextCursor ?? null : null;
+  } while (next && items.length < ARCHIVE_WANT);
+  return { items, cursor: next };
 }
 
 // Longest-waiting permission first, then errors, then the newest finished.
