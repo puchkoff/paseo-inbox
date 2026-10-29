@@ -118,8 +118,9 @@ function HostTile({ theme, text, label, color, count, on, onPress }: {
         <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{text}</Text>
       </View>
       {count > 0 ? (
-        <View style={{ position: "absolute", top: -7, right: -7, backgroundColor: c.statusWarning, borderRadius: 999, paddingHorizontal: 5, minWidth: 18, alignItems: "center" }}>
-          <Text style={{ color: "#000", fontSize: 11, fontWeight: "700" }}>{count}</Text>
+        // Fixed amber: theme statusWarning is dark brown in some themes, and black text vanished on it.
+        <View style={{ position: "absolute", top: -8, right: -8, backgroundColor: "#ffb020", borderColor: c.surface0, borderWidth: 2, borderRadius: 999, paddingHorizontal: 5, minWidth: 22, alignItems: "center" }}>
+          <Text style={{ color: "#000", fontSize: 13, fontWeight: "800" }}>{count}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -385,9 +386,12 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
   const [chosen, setChosen] = useState(host.id);
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
-  const items = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
+  const scoped = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
+  // Finished agents get their own Done section; Waiting keeps permission requests and errors.
+  const items = scoped.filter((i) => i.reason !== "finished");
+  const done = scoped.filter((i) => i.reason === "finished");
   const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
-  const countOn = (id: string) => allItems.filter((i) => i.hostId === id).length;
+  const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
 
   // Re-render each 15 s so the elapsed times advance between polls.
@@ -433,7 +437,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         </Text>
         {hosts.length > 1 ? (
           <View style={{ flexDirection: "row", gap: 12, paddingTop: 6, paddingRight: 6 }}>
-            <HostTile theme={theme} text="ALL" label="All hosts" color={c.foregroundMuted} count={allItems.length} on={scope === "all"} onPress={() => setChosen("all")} />
+            <HostTile theme={theme} text="ALL" label="All hosts" color={c.foregroundMuted} count={allItems.filter((i) => i.reason !== "finished").length} on={scope === "all"} onPress={() => setChosen("all")} />
             {hosts.map((h) => (
               <HostTile key={h.serverId} theme={theme} text={initials(h.label)} label={h.label} color={hostColor(h.serverId)}
                 count={countOn(h.serverId)} on={scope === h.serverId} onPress={() => setChosen(h.serverId)} />
@@ -465,7 +469,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         <>
           <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
             Waiting on you <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>
-              {items.length} {pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "finished or failed, newest first"}
+              {items.length} {pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}
             </Text>
           </Text>
           <View>
@@ -484,6 +488,20 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           </Text>
           <View>
             {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} onOpenWorkspace={openWorkspace} />)}
+          </View>
+        </>
+      ) : null}
+
+      {tab === "queue" && view === "agents" && done.length > 0 ? (
+        <>
+          <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
+            Done <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{done.length} finished, newest first</Text>
+          </Text>
+          <View>
+            {done.map((item) => (
+              <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
+                busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
+            ))}
           </View>
         </>
       ) : null}

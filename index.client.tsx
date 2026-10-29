@@ -17,7 +17,8 @@ function Badge({ count, icon, label, color, fg }: { count: number; icon: string;
 
 function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps) {
   const { items, running } = useInbox(5000, true);
-  // Same rule as the screen: an agent waiting on a permission counts as waiting, not running.
+  // Same rules as the screen: finished agents are Done, not waiting; an agent waiting on a permission counts as waiting, not running.
+  const waiting = items.filter((i) => i.reason !== "finished").length;
   const working = running.filter((i) => !i.needsYou).length;
   const c = theme.colors;
   return (
@@ -25,9 +26,9 @@ function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps)
       icon="Inbox"
       active={currentScreen?.screenId === "inbox"}
       onPress={() => openScreen({ screenId: "inbox" })}
-      trailing={items.length > 0 || working > 0 ? (
+      trailing={waiting > 0 || working > 0 ? (
         <View style={{ flexDirection: "row", gap: 4, marginRight: 8 }}>
-          <Badge count={items.length} icon="Hourglass" label="waiting on you" color={c.statusWarning} fg={c.accentForeground} />
+          <Badge count={waiting} icon="Hourglass" label="waiting on you" color={c.statusWarning} fg={c.accentForeground} />
           <Badge count={working} icon="Activity" label="running" color={c.accent} fg={c.accentForeground} />
         </View>
       ) : null}
