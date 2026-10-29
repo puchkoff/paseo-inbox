@@ -338,8 +338,8 @@ function useCollapsed(): [Set<SectionId>, (id: SectionId) => void] {
 }
 
 // One framed box per section: tinted clickable header, rows below. The note stays visible when collapsed.
-function Section({ theme, title, note, open, onToggle, children }: {
-  theme: PluginTheme; title: string; note: string; open: boolean; onToggle: () => void; children?: React.ReactNode;
+function Section({ theme, title, icon, color, note, open, onToggle, children }: {
+  theme: PluginTheme; title: string; icon: string; color: string; note: string; open: boolean; onToggle: () => void; children?: React.ReactNode;
 }) {
   const c = theme.colors;
   return (
@@ -347,6 +347,7 @@ function Section({ theme, title, note, open, onToggle, children }: {
       <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${open ? "collapse" : "expand"}`} accessibilityState={{ expanded: open }}
         onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: c.surface1, borderBottomWidth: open ? 1 : 0, borderBottomColor: c.border }}>
         <Icon name={open ? "ChevronDown" : "ChevronRight"} size={18} color={c.foregroundMuted} />
+        <Icon name={icon} size={18} color={color} />
         <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "700" }}>
           {title} <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{note}</Text>
         </Text>
@@ -456,23 +457,23 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
-      <Section theme={theme} title="Waiting on you" open={isOpen("waiting")} onToggle={() => toggle("waiting")}
+      <Section theme={theme} title="Waiting on you" icon="Hourglass" color={c.statusWarning} open={isOpen("waiting")} onToggle={() => toggle("waiting")}
         note={!loaded ? "loading…" : !shown.waiting.length ? (q ? "no matches" : "none") : `${shown.waiting.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
         {byWs ? wsRows(shown.waiting, c.statusWarning) : shown.waiting.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
       </Section>
 
       {shown.running.length > 0 ? (
-        <Section theme={theme} title="Running" note={`${shown.running.length} working now, newest first`} open={isOpen("running")} onToggle={() => toggle("running")}>
+        <Section theme={theme} title="Running" icon="Activity" color={INDIGO} note={`${shown.running.length} working now, newest first`} open={isOpen("running")} onToggle={() => toggle("running")}>
           {byWs ? wsRows(shown.running, INDIGO) : shown.running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
         </Section>
       ) : null}
 
-      <Section theme={theme} title="Done" open={isOpen("done")} onToggle={() => toggle("done")}
+      <Section theme={theme} title="Done" icon="CircleCheck" color={c.statusSuccess} open={isOpen("done")} onToggle={() => toggle("done")}
         note={!loaded ? "loading…" : shown.done.length ? `${shown.done.length} finished in the last 24 h, newest first` : q ? "no matches in the last 24 h" : "none in the last 24 h"}>
         {byWs ? wsRows(shown.done, c.statusSuccess) : shown.done.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
       </Section>
 
-      <Section theme={theme} title="Archive" open={isOpen("archive")} onToggle={() => toggle("archive")}
+      <Section theme={theme} title="Archive" icon="Archive" color={c.foregroundMuted} open={isOpen("archive")} onToggle={() => toggle("archive")}
         note={archive.items.length ? `${archiveRows}${archive.more ? "+" : ""} ${byWs ? "workspaces" : "archived"}${q ? " matching" : ""}, newest first` : archive.loading ? "loading…" : isOpen("archive") ? "none" : "archived agents"}>
         {byWs ? wsRows(shown.archive, c.foregroundMuted) : shown.archive.map((item) => (
           <Card key={item.key} theme={theme} item={item} busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} />
