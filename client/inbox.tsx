@@ -322,11 +322,50 @@ function WorkspaceLine({ theme, row, onOpenWorkspace }: {
   );
 }
 
+declare const localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void } | undefined;
+const COLLAPSED_KEY = "paseo-inbox:collapsed";
+type SectionId = "waiting" | "running" | "done";
+
+// Collapsed sections survive reloads on web; native has no localStorage and starts expanded.
+function useCollapsed(): [Set<SectionId>, (id: SectionId) => void] {
+  const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage?.getItem(COLLAPSED_KEY) ?? "[]"));
+    } catch {
+      return new Set();
+    }
+  });
+  const toggle = (id: SectionId) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (!next.delete(id)) next.add(id);
+    try { localStorage?.setItem(COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* private mode: keep in memory */ }
+    return next;
+  });
+  return [collapsed, toggle];
+}
+
+// Pressable section title with a chevron; the muted note stays visible when collapsed.
+function SectionHeader({ theme, title, note, open, first, onToggle }: {
+  theme: PluginTheme; title: string; note: string; open: boolean; first?: boolean; onToggle: () => void;
+}) {
+  const c = theme.colors;
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${open ? "collapse" : "expand"}`} accessibilityState={{ expanded: open }}
+      onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: first ? 0 : 12 }}>
+      <Icon name={open ? "ChevronDown" : "ChevronRight"} size={18} color={c.foregroundMuted} />
+      <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
+        {title} <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{note}</Text>
+      </Text>
+    </Pressable>
+  );
+}
+
 export function InboxScreen({ theme, host, layout, navigation }: PluginScreenProps) {
   const c = theme.colors;
   const toast = useToast();
   const [view, setView] = useState<"agents" | "workspaces">("agents");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [collapsed, toggle] = useCollapsed();
   const { items: allItems, running: allRunning, done: allDone, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
@@ -395,50 +434,42 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           {workspaces.length === 0 ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{loaded ? "No workspace has an agent waiting or running." : "loading…"}</Text> : null}
           {workspaces.map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} onOpenWorkspace={openWorkspace} />)}
         </View>
-      ) : items.length === 0 ? (
-        <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
-          Waiting on you <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{loaded ? "none" : "loading…"}</Text>
-        </Text>
       ) : (
         <>
-          <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
-            Waiting on you <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>
-              {items.length} {pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}
-            </Text>
-          </Text>
-          <View>
-            {items.map((item) => (
-              <Card key={item.key} theme={theme} item={item}
-                busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
-            ))}
-          </View>
+          <SectionHeader theme={theme} title="Waiting on you" first open={!collapsed.has("waiting")} onToggle={() => toggle("waiting")}
+            note={!loaded ? "loading…" : !items.length ? "none" : `${items.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`} />
+          {collapsed.has("waiting") ? null : (
+            <View>
+              {items.map((item) => (
+                <Card key={item.key} theme={theme} item={item}
+                  busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
+              ))}
+            </View>
+          )}
+
+          {running.length > 0 ? (
+            <>
+              <SectionHeader theme={theme} title="Running" note={`${running.length} working now, newest first`} open={!collapsed.has("running")} onToggle={() => toggle("running")} />
+              {collapsed.has("running") ? null : (
+                <View>
+                  {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} onOpenWorkspace={openWorkspace} />)}
+                </View>
+              )}
+            </>
+          ) : null}
+
+          <SectionHeader theme={theme} title="Done" open={!collapsed.has("done")} onToggle={() => toggle("done")}
+            note={!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"} />
+          {collapsed.has("done") ? null : (
+            <View>
+              {done.map((item) => (
+                <Card key={item.key} theme={theme} item={item}
+                  busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
+              ))}
+            </View>
+          )}
         </>
       )}
-
-      {view === "agents" && running.length > 0 ? (
-        <>
-          <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
-            Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, newest first</Text>
-          </Text>
-          <View>
-            {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} onOpenWorkspace={openWorkspace} />)}
-          </View>
-        </>
-      ) : null}
-
-      {view === "agents" ? (
-        <>
-          <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
-            Done <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"}</Text>
-          </Text>
-          <View>
-            {done.map((item) => (
-              <Card key={item.key} theme={theme} item={item}
-                busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
-            ))}
-          </View>
-        </>
-      ) : null}
     </ScrollView>
   );
 }
