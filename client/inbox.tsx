@@ -1,12 +1,11 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
-import { useHosts, useSettings } from "@getpaseo/plugin/client";
+import { useHosts } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { InboxItem } from "../shared/inbox.ts";
 import type { RunningItem } from "../shared/running.ts";
-import { type Rule, rulesSettings } from "../shared/rules.ts";
 import { initials } from "../shared/hosts.ts";
 import { groupByWorkspace, type WorkspaceRow } from "../shared/workspaces.ts";
 import { answer, useInbox } from "./use-inbox.ts";
@@ -144,27 +143,22 @@ function IconBtn({ icon, label, onPress }: { icon: string; label: string; onPres
 interface CardProps {
   theme: PluginTheme;
   item: InboxItem;
-  rulesReady: boolean;
-  // Rules live on the host this screen is open on; an item from another host can't save one here.
-  rulesHere: boolean;
   busy: boolean;
   compact: boolean;
-  onAnswer: (item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) => void;
+  onAnswer: (item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string }) => void;
   onOpen?: (item: InboxItem) => void;
   onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
 }
 
 // One hairline-separated row. Wide: status dot, title, meta, age and buttons on one line.
 // Compact (phone): title + age, then meta + button; a permission request stacks its buttons below.
-function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onOpen, onOpenWorkspace }: CardProps) {
-  const [always, setAlways] = useState(false);
+function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }: CardProps) {
   const req = item.request;
   const c = theme.colors;
   const status =
     item.reason === "permission" ? { color: c.statusWarning, label: req?.kind ?? "permission" }
     : item.reason === "error" ? { color: c.statusDanger, label: "error" }
     : { color: c.statusSuccess, label: "finished" };
-  const canAlways = !!req && req.kind === "tool" && !!req.command && !req.risky && !!item.projectId && rulesReady && rulesHere;
   const customActions = req?.actions ?? [];
 
   const dot = <View accessibilityLabel={status.label} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: status.color }} />;
@@ -192,29 +186,13 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
           ))
         : (
           <>
-            <Btn theme={theme} label="Allow once" tone="ok" disabled={busy} onPress={() => onAnswer(item, "allow", { always })} />
+            <Btn theme={theme} label="Allow once" tone="ok" disabled={busy} onPress={() => onAnswer(item, "allow")} />
             <Btn theme={theme} label="Deny" tone="bad" disabled={busy} onPress={() => onAnswer(item, "deny")} />
           </>
         )}
       {open}
     </>
   ) : null;
-  const alwaysBox = req && customActions.length === 0 && req.kind === "tool" ? (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: always, disabled: !canAlways }}
-      disabled={!canAlways}
-      onPress={() => setAlways(!always)}
-      style={{ opacity: canAlways ? 1 : 0.4 }}
-    >
-      <Text style={{ color: c.foregroundMuted, fontSize: FS.tiny }}>
-        {rulesHere
-          ? `${always ? "☑" : "☐"} Always allow this exact command in ${item.project || "this project"}`
-          : `Rules are per daemon: open Inbox on ${item.hostLabel} to add one`}
-      </Text>
-    </Pressable>
-  ) : null;
-
   const detail = req ? (
     <View style={{ gap: 6, marginTop: 8, marginLeft: compact ? 0 : 21 }}>
       {req.kind !== "tool" || !req.command ? <Text style={{ color: c.foreground, fontSize: FS.body }}>{req.title}</Text> : null}
@@ -223,9 +201,7 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
           <Text selectable style={{ color: c.foreground, fontFamily: "monospace", fontSize: FS.small }}>{req.body}</Text>
         </View>
       ) : null}
-      {req.risky && rulesHere ? (
-        <Text style={{ color: c.statusDanger, fontSize: FS.small }}>Matches a destructive pattern. "Always allow" is off for this command.</Text>
-      ) : null}
+      {req.risky ? <Text style={{ color: c.statusDanger, fontSize: FS.small }}>Matches a destructive pattern.</Text> : null}
     </View>
   ) : null;
 
@@ -247,7 +223,6 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
         {req ? (
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
             {answers}
-            {alwaysBox ? <View style={{ flexBasis: "100%" }}>{alwaysBox}</View> : null}
           </View>
         ) : null}
       </View>
@@ -261,7 +236,6 @@ function Card({ theme, item, rulesReady, rulesHere, busy, compact, onAnswer, onO
         <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
         {time}
         {req ? answers : open}
-        {alwaysBox}
       </View>
       <Text style={{ color: c.foregroundMuted, fontSize: FS.small, marginLeft: 21 }} numberOfLines={1}>{info}</Text>
       {detail}
@@ -348,48 +322,21 @@ function WorkspaceLine({ theme, row, onOpenWorkspace }: {
   );
 }
 
-function Rules({ theme, hostLabel }: { theme: PluginTheme; hostLabel: string }) {
-  const settings = useSettings(rulesSettings);
-  const c = theme.colors;
-  if (settings.status === "loading") return <Text style={{ color: c.foregroundMuted, fontSize: FS.body }}>Loading…</Text>;
-  if (settings.status !== "ready") return <Text style={{ color: c.statusDanger, fontSize: FS.body }}>Rules unavailable.</Text>;
-  const rules = settings.values.rules;
-  const remove = (r: Rule) => settings.save({ rules: rules.filter((x) => x.id !== r.id) }, settings.revision);
-  return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>
-        Rules on {hostLabel}. They answer tool permission requests there and match the exact command in one project, never a pattern. Destructive commands are never auto-allowed.
-      </Text>
-      {rules.length === 0 ? <Text style={{ color: c.foregroundMuted, paddingVertical: 24, textAlign: "center", fontSize: FS.body }}>No rules yet. Tick "Always allow" on a request to add one.</Text> : null}
-      {rules.map((r) => (
-        <View key={r.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: c.surface1, borderColor: c.border, borderWidth: 1, borderRadius: 10, padding: 12 }}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text selectable style={{ color: r.action === "deny" ? c.statusDanger : c.foreground, fontFamily: "monospace", fontSize: FS.small }}>{r.command}</Text>
-            <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{r.action} · {r.projectName}</Text>
-          </View>
-          <Btn theme={theme} label="Remove" onPress={() => void remove(r)} />
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export function InboxScreen({ theme, host, layout, navigation }: PluginScreenProps) {
   const c = theme.colors;
-  const settings = useSettings(rulesSettings);
   const toast = useToast();
-  const [tab, setTab] = useState<"queue" | "rules">("queue");
   const [view, setView] = useState<"agents" | "workspaces">("agents");
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const { items: allItems, running: allRunning, problems, loaded, refresh } = useInbox(2000, true);
+  const { items: allItems, running: allRunning, done: allDone, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
   const [chosen, setChosen] = useState(host.id);
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
   const scoped = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
-  // Finished agents get their own Done section; Waiting keeps permission requests and errors.
+  // Finished agents are in Done (below); Waiting keeps permission requests and errors.
   const items = scoped.filter((i) => i.reason !== "finished");
-  const done = scoped.filter((i) => i.reason === "finished");
+  // An idle agent in a still-working workspace is already in Running as background tasks.
+  const done = (scope === "all" ? allDone : allDone.filter((i) => i.hostId === scope)).filter((i) => !allRunning.some((r) => r.hostId === i.hostId && r.agentId === i.agentId));
   const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
@@ -401,18 +348,9 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
     return () => clearInterval(t);
   }, []);
 
-  async function respond(item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string; always?: boolean }) {
+  async function respond(item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string }) {
     setBusyKey(item.key);
     try {
-      if (opts?.always && item.request?.command && item.projectId && settings.status === "ready") {
-        const rule: Rule = {
-          id: `${Date.now()}`, action: "allow", command: item.request.command,
-          projectId: item.projectId, projectName: item.project, createdAt: new Date().toISOString(),
-        };
-        if (!(await settings.save({ rules: [...settings.values.rules, rule] }, settings.revision))) {
-          throw new Error("Could not save the rule");
-        }
-      }
       await answer(item, behavior, opts?.actionId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -447,16 +385,12 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        {tab === "queue" ? (
-          <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
-        ) : null}
-        <View style={{ flex: 1 }} />
-        <Seg theme={theme} value={tab} onChange={setTab} options={[{ id: "queue", label: "Queue", icon: "Inbox" }, { id: "rules", label: "Rules", icon: "ShieldCheck" }]} />
+        <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
       </View>
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
-      {tab === "rules" ? <Rules theme={theme} hostLabel={host.label} /> : view === "workspaces" ? (
+      {view === "workspaces" ? (
         <View>
           {workspaces.length === 0 ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{loaded ? "No workspace has an agent waiting or running." : "loading…"}</Text> : null}
           {workspaces.map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} onOpenWorkspace={openWorkspace} />)}
@@ -474,14 +408,14 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           </Text>
           <View>
             {items.map((item) => (
-              <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
+              <Card key={item.key} theme={theme} item={item}
                 busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
             ))}
           </View>
         </>
       )}
 
-      {tab === "queue" && view === "agents" && running.length > 0 ? (
+      {view === "agents" && running.length > 0 ? (
         <>
           <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
             Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, newest first</Text>
@@ -492,14 +426,14 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         </>
       ) : null}
 
-      {tab === "queue" && view === "agents" && done.length > 0 ? (
+      {view === "agents" ? (
         <>
           <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
-            Done <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{done.length} finished, newest first</Text>
+            Done <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"}</Text>
           </Text>
           <View>
             {done.map((item) => (
-              <Card key={item.key} theme={theme} item={item} rulesReady={settings.status === "ready"} rulesHere={item.hostId === host.id}
+              <Card key={item.key} theme={theme} item={item}
                 busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
             ))}
           </View>

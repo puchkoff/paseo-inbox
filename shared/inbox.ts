@@ -96,6 +96,35 @@ export async function collectInbox(paseo: PaseoApi): Promise<Omit<InboxItem, "ho
   return items;
 }
 
+const DONE_MAX = 15;
+const DONE_WINDOW_MS = 24 * 3600_000;
+
+// One host's agents whose turn ended in the last 24 h, newest first; agents waiting on a permission are left to collectInbox.
+// shortcut: newest 15 per host, raise DONE_MAX if the list feels short.
+export async function collectDone(paseo: PaseoApi, now = Date.now()): Promise<Omit<InboxItem, "hostId" | "hostLabel">[]> {
+  const [{ entries }, workspaces] = await Promise.all([
+    paseo.agents.list({ filter: { statuses: ["idle"], includeArchived: false }, page: { limit: 200 } }),
+    workspaceIndex(paseo),
+  ]);
+  return entries
+    .map((e) => e.agent)
+    .filter((a) => {
+      const ws = a.workspaceId ? workspaces.get(a.workspaceId) : undefined;
+      return !a.archivedAt && !(a.workspaceId && !ws) && a.pendingPermissions.length === 0
+        && a.attentionReason !== "error" && now - Date.parse(a.updatedAt) < DONE_WINDOW_MS;
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, DONE_MAX)
+    .map((a) => {
+      const ws = a.workspaceId ? workspaces.get(a.workspaceId) : undefined;
+      return {
+        key: `${a.id}:done`, agentId: a.id, title: a.title ?? a.id.slice(0, 8), provider: a.provider,
+        projectId: ws?.projectId ?? null, workspaceId: a.workspaceId ?? null, project: ws?.project ?? "", workspace: ws?.workspace ?? "",
+        at: a.updatedAt, reason: "finished" as const, request: null,
+      };
+    });
+}
+
 // Longest-waiting permission first, then errors, then the newest finished.
 export function sortInbox<T extends Pick<InboxItem, "reason" | "at">>(items: T[]): T[] {
   const rank = (i: T) => (i.reason === "permission" ? 0 : i.reason === "error" ? 1 : 2);

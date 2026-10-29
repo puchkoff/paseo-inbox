@@ -2,11 +2,9 @@
 
 ![Inbox: Paseo plugin screen (illustration)](docs/hero.svg)
 
-One screen for everything waiting on you, with auto-rules for permission requests.
+One screen for everything waiting on you, what is running, and what just finished.
 
-Collects tool permission requests, plans and questions from agents, and agents that finished or failed. Answer in one press or open the agent. A Running section below the queue lists working agents. Polls every couple of seconds; the sidebar row shows the count.
-
-**Auto-rules:** ticking *Always allow this exact command* saves a per-project rule that matches the whole command string exactly. Destructive commands (`rm -rf`, `sudo`, `git push --force`, `terraform apply`, …) are never auto-allowed; that check is a pattern list, not a shell parser. Rules are stored in the plugin's host settings, shared by every client of that daemon. Plugins are unsandboxed, so review the Auto-rules tab now and then.
+Collects tool permission requests, plans and questions from agents, and agents that failed. Answer in one press or open the agent. Below, Running lists working agents and Done lists agents that finished in the last 24 hours. Polls every couple of seconds; the sidebar row shows the count.
 
 ## Install
 

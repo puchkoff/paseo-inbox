@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectInbox, sortInbox } from "./inbox.ts";
+import { collectDone, collectInbox, sortInbox } from "./inbox.ts";
 
 const agent = (over: Record<string, unknown>) => ({
   id: "a1", title: "T", provider: "claude", workspaceId: "w1", updatedAt: "2026-01-01T00:00:00Z",
@@ -49,4 +49,20 @@ test("sort: permissions oldest first, then errors, then newest finished", () => 
   const it = (reason: "permission" | "error" | "finished", at: string) => ({ reason, at });
   const r = sortInbox([it("finished", "1"), it("permission", "3"), it("finished", "2"), it("error", "1"), it("permission", "2")]);
   assert.deepEqual(r.map((i) => `${i.reason}${i.at}`), ["permission2", "permission3", "error1", "finished2", "finished1"]);
+});
+
+test("done lists recent idle agents newest first, skipping old, errored, blocked and archived-workspace ones", async () => {
+  const now = Date.parse("2026-01-02T12:00:00Z");
+  const api = {
+    agents: { list: async () => ({ entries: [
+      agent({ id: "old", updatedAt: "2025-12-31T00:00:00Z" }),
+      agent({ id: "a", updatedAt: "2026-01-02T10:00:00Z" }),
+      agent({ id: "b", updatedAt: "2026-01-02T11:00:00Z" }),
+      agent({ id: "err", updatedAt: "2026-01-02T11:00:00Z", attentionReason: "error" }),
+      agent({ id: "blocked", updatedAt: "2026-01-02T11:00:00Z", pendingPermissions: [perm] }),
+      agent({ id: "gone", updatedAt: "2026-01-02T11:00:00Z", workspaceId: "w9" }),
+    ].map((a) => ({ agent: a })) }) },
+    workspaces: { list: async () => ({ entries: [{ id: "w1", projectId: "p1", projectDisplayName: "app", name: "main" }] }) },
+  } as never;
+  assert.deepEqual((await collectDone(api, now)).map((i) => i.agentId), ["b", "a"]);
 });

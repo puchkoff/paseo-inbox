@@ -1,24 +1,4 @@
-import { defineSettings } from "@getpaseo/plugin";
-import { z } from "zod";
-
-export const ruleSchema = z.object({
-  id: z.string(),
-  action: z.enum(["allow", "deny"]),
-  command: z.string(),
-  projectId: z.string(),
-  projectName: z.string(),
-  createdAt: z.string(),
-});
-export type Rule = z.infer<typeof ruleSchema>;
-
-export const rulesSettings = defineSettings({
-  id: "rules",
-  scope: "host",
-  version: 1,
-  schema: z.object({ rules: z.array(ruleSchema).default([]) }),
-});
-
-// Never auto-allowed, and "always allow" is not offered. A heuristic, not a shell parser.
+// Flags a request as risky (red row). A heuristic, not a shell parser.
 const DESTRUCTIVE = [
   /\brm\s+(-\w*[rf]\w*\s+)+/,
   /\bsudo\b/,
@@ -40,9 +20,4 @@ export function commandOf(input: Record<string, unknown> | undefined): string | 
   if (!input) return null;
   const c = input.command ?? input.cmd;
   return typeof c === "string" && c.trim() ? c.trim() : null;
-}
-
-// Exact match only: a rule never covers a longer or chained command.
-export function findRule(rules: readonly Rule[], projectId: string, command: string): Rule | undefined {
-  return rules.find((r) => r.projectId === projectId && r.command === command.trim());
 }
