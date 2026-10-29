@@ -337,15 +337,21 @@ function useCollapsed(): [Set<SectionId>, (id: SectionId) => void] {
   return [collapsed, toggle];
 }
 
+// Section colour at low alpha for the header band; theme colours that aren't #rrggbb fall back to surface2.
+function tint(color: string, fallback: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}26` : fallback;
+}
+
 // One framed box per section: tinted clickable header, rows below. The note stays visible when collapsed.
 function Section({ theme, title, icon, color, note, open, onToggle, children }: {
   theme: PluginTheme; title: string; icon: string; color: string; note: string; open: boolean; onToggle: () => void; children?: React.ReactNode;
 }) {
   const c = theme.colors;
   return (
-    <View style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, overflow: "hidden" }}>
+    <View style={{ borderWidth: 1, borderColor: c.border, borderLeftWidth: 4, borderLeftColor: color, borderRadius: 12, overflow: "hidden",
+      backgroundColor: c.surface0, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${open ? "collapse" : "expand"}`} accessibilityState={{ expanded: open }}
-        onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: c.surface1, borderBottomWidth: open ? 1 : 0, borderBottomColor: c.border }}>
+        onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 10, backgroundColor: tint(color, c.surface2), borderBottomWidth: open ? 1 : 0, borderBottomColor: c.border }}>
         <Icon name={open ? "ChevronDown" : "ChevronRight"} size={18} color={c.foregroundMuted} />
         <Icon name={icon} size={18} color={color} />
         <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "700" }}>
