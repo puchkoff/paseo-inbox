@@ -7,6 +7,7 @@ import { Pressable, Text, View } from "react-native";
 import type { InboxItem } from "../shared/inbox.ts";
 import type { RunningItem } from "../shared/running.ts";
 import { type Rule, rulesSettings } from "../shared/rules.ts";
+import { initials } from "../shared/hosts.ts";
 import { groupByWorkspace, type WorkspaceRow } from "../shared/workspaces.ts";
 import { answer, useInbox } from "./use-inbox.ts";
 
@@ -80,6 +81,48 @@ function OpenButtons<T extends { hostId: string; workspaceId: string | null }>({
       {onOpen ? <IconBtn icon="Bot" label="Open agent" onPress={() => onOpen(item)} /> : null}
       {onOpenWorkspace && ws ? <IconBtn icon="AppWindow" label="Open workspace" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
     </>
+  );
+}
+
+// iOS-style segmented control: one pill track, the chosen option raised.
+function Seg<T extends string>({ theme, value, options, onChange }: {
+  theme: PluginTheme; value: T; options: { id: T; label: string; icon: string }[]; onChange: (id: T) => void;
+}) {
+  const c = theme.colors;
+  return (
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", backgroundColor: c.surface2, borderRadius: 10, padding: 3 }}>
+      {options.map((o) => {
+        const on = o.id === value;
+        return (
+          <Pressable key={o.id} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(o.id)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: on ? c.surface0 : "transparent" }}>
+            <Icon name={o.icon} size={15} color={on ? c.foreground : c.foregroundMuted} />
+            <Text style={{ color: on ? c.foreground : c.foregroundMuted, fontSize: FS.small, fontWeight: on ? "600" : "400" }}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// Host switcher tile: coloured initials, waiting-count badge; unselected tiles are dimmed.
+function HostTile({ theme, text, label, color, count, on, onPress }: {
+  theme: PluginTheme; text: string; label: string; color: string; count: number; on: boolean; onPress: () => void;
+}) {
+  const c = theme.colors;
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${count} waiting`} accessibilityState={{ selected: on }} onPress={onPress}
+      style={{ width: 36, height: 36, borderRadius: 10, borderWidth: 2, borderColor: on ? c.foreground : "transparent" }}>
+      {/* Dim only the tile so the badge stays readable on an unselected host. */}
+      <View style={{ flex: 1, borderRadius: 8, backgroundColor: color, alignItems: "center", justifyContent: "center", opacity: on ? 1 : 0.45 }}>
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{text}</Text>
+      </View>
+      {count > 0 ? (
+        <View style={{ position: "absolute", top: -7, right: -7, backgroundColor: c.statusWarning, borderRadius: 999, paddingHorizontal: 5, minWidth: 18, alignItems: "center" }}>
+          <Text style={{ color: "#000", fontSize: 11, fontWeight: "700" }}>{count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -343,6 +386,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const [chosen, setChosen] = useState(host.id);
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
   const items = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
+  const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id).length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
 
@@ -381,31 +425,32 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.surface0 }} contentContainerStyle={{ padding: layout.compact ? 16 : 24, gap: 12, maxWidth: 860, width: "100%", alignSelf: "center" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Text style={{ color: c.foreground, fontSize: FS.title, fontWeight: "600", flex: 1 }}>
-          Inbox <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{items.length ? `${items.length} waiting on you` : "all clear"}</Text>
+          Inbox <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>
+            {items.length ? `${items.length} waiting on you` : "all clear"}{hosts.length > 1 ? ` · ${scopeLabel}` : ""}
+          </Text>
         </Text>
-        <Btn theme={theme} label="Queue" tone={tab === "queue" ? "on" : "plain"} onPress={() => setTab("queue")} />
-        <Btn theme={theme} label="Auto-rules" tone={tab === "rules" ? "on" : "plain"} onPress={() => setTab("rules")} />
+        {hosts.length > 1 ? (
+          <View style={{ flexDirection: "row", gap: 12, paddingTop: 6, paddingRight: 6 }}>
+            <HostTile theme={theme} text="ALL" label="All hosts" color={c.foregroundMuted} count={allItems.length} on={scope === "all"} onPress={() => setChosen("all")} />
+            {hosts.map((h) => (
+              <HostTile key={h.serverId} theme={theme} text={initials(h.label)} label={h.label} color={hostColor(h.serverId)}
+                count={countOn(h.serverId)} on={scope === h.serverId} onPress={() => setChosen(h.serverId)} />
+            ))}
+          </View>
+        ) : null}
       </View>
 
-      {hosts.length > 1 ? (
-        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-          <Btn theme={theme} label={`All hosts (${allItems.length})`} tone={scope === "all" ? "on" : "plain"} onPress={() => setChosen("all")} />
-          {hosts.map((h) => (
-            <Btn key={h.serverId} theme={theme} label={`${h.label} (${countOn(h.serverId)})`} tone={scope === h.serverId ? "on" : "plain"} onPress={() => setChosen(h.serverId)} />
-          ))}
-        </View>
-      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        {tab === "queue" ? (
+          <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
+        ) : null}
+        <View style={{ flex: 1 }} />
+        <Seg theme={theme} value={tab} onChange={setTab} options={[{ id: "queue", label: "Queue", icon: "Inbox" }, { id: "rules", label: "Rules", icon: "ShieldCheck" }]} />
+      </View>
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
-
-      {tab === "queue" ? (
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <Btn theme={theme} label="Agents" tone={view === "agents" ? "on" : "plain"} onPress={() => setView("agents")} />
-          <Btn theme={theme} label="Workspaces" tone={view === "workspaces" ? "on" : "plain"} onPress={() => setView("workspaces")} />
-        </View>
-      ) : null}
 
       {tab === "rules" ? <Rules theme={theme} hostLabel={host.label} /> : view === "workspaces" ? (
         <View>
