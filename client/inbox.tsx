@@ -7,6 +7,7 @@ import { Pressable, Text, View } from "react-native";
 import type { InboxItem } from "../shared/inbox.ts";
 import type { RunningItem } from "../shared/running.ts";
 import { type Rule, rulesSettings } from "../shared/rules.ts";
+import { groupByWorkspace, type WorkspaceRow } from "../shared/workspaces.ts";
 import { answer, useInbox } from "./use-inbox.ts";
 
 // One scale for the whole screen. 26/17/15/13.5 read too small, 29/19/17/15 too big.
@@ -286,6 +287,23 @@ function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
   );
 }
 
+function WorkspaceLine({ theme, row, onOpenWorkspace }: {
+  theme: PluginTheme; row: WorkspaceRow; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+}) {
+  const c = theme.colors;
+  const counts = [row.waiting ? `${row.waiting} waiting` : "", row.running ? `${row.running} running` : ""].filter(Boolean).join(" · ");
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border }}>
+      <View accessibilityLabel={row.waiting ? "waiting" : "running"} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: row.waiting ? c.statusWarning : INDIGO }} />
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }} numberOfLines={1}>{row.workspace || row.project}</Text>
+        <Text style={{ color: c.foregroundMuted, fontSize: FS.small }} numberOfLines={1}><Host item={row} />{` · ${row.project} · ${counts}`}</Text>
+      </View>
+      {onOpenWorkspace ? <IconBtn icon="AppWindow" label="Open workspace" onPress={() => onOpenWorkspace(row.workspaceId, row.hostId)} /> : null}
+    </View>
+  );
+}
+
 function Rules({ theme, hostLabel }: { theme: PluginTheme; hostLabel: string }) {
   const settings = useSettings(rulesSettings);
   const c = theme.colors;
@@ -317,6 +335,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const settings = useSettings(rulesSettings);
   const toast = useToast();
   const [tab, setTab] = useState<"queue" | "rules">("queue");
+  const [view, setView] = useState<"agents" | "workspaces">("agents");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const { items: allItems, running: allRunning, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
@@ -357,6 +376,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
   const openAgent = navigation ? (item: InboxItem | RunningItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
   const openWorkspace = navigation ? (workspaceId: string, serverId: string) => navigation.openWorkspace({ workspaceId, serverId }) : undefined;
+  const workspaces = groupByWorkspace(items, running);
   const pending = items.filter((i) => i.reason === "permission").length;
 
   return (
@@ -380,7 +400,19 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
-      {tab === "rules" ? <Rules theme={theme} hostLabel={host.label} /> : items.length === 0 ? (
+      {tab === "queue" ? (
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <Btn theme={theme} label="Agents" tone={view === "agents" ? "on" : "plain"} onPress={() => setView("agents")} />
+          <Btn theme={theme} label="Workspaces" tone={view === "workspaces" ? "on" : "plain"} onPress={() => setView("workspaces")} />
+        </View>
+      ) : null}
+
+      {tab === "rules" ? <Rules theme={theme} hostLabel={host.label} /> : view === "workspaces" ? (
+        <View>
+          {workspaces.length === 0 ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>{loaded ? "No workspace has an agent waiting or running." : "loading…"}</Text> : null}
+          {workspaces.map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} onOpenWorkspace={openWorkspace} />)}
+        </View>
+      ) : items.length === 0 ? (
         <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
           Waiting on you <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{loaded ? "none" : "loading…"}</Text>
         </Text>
@@ -400,7 +432,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         </>
       )}
 
-      {tab === "queue" && running.length > 0 ? (
+      {tab === "queue" && view === "agents" && running.length > 0 ? (
         <>
           <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", marginTop: 12 }}>
             Running <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{running.length} working now, newest first</Text>
