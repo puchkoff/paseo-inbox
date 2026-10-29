@@ -12,6 +12,8 @@ import { answer, useArchive, useInbox } from "./use-inbox.ts";
 
 // One scale for the whole screen. 26/17/15/13.5 read too small, 29/19/17/15 too big.
 const FS = { title: 27, body: 18, small: 16, tiny: 14 };
+// Rows are denser than headings so a long list fits on screen.
+const ROW = { title: 16, meta: 14 };
 
 function age(iso: string | null): string {
   if (!iso) return "";
@@ -71,15 +73,13 @@ function Btn({ theme, label, tone = "plain", disabled, onPress }: {
   );
 }
 
-function OpenButtons<T extends { hostId: string; workspaceId: string | null }>({ item, onOpen, onOpenWorkspace }: {
-  item: T; onOpen?: (item: T) => void; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
-}) {
-  const ws = item.workspaceId;
+// Whole-row press target; buttons inside keep their own press.
+function Row({ label, onPress, style, children }: { label: string; onPress?: () => void; style: object; children: React.ReactNode }) {
+  if (!onPress) return <View style={style}>{children}</View>;
   return (
-    <>
-      {onOpen ? <IconBtn icon="Bot" label="Open agent" onPress={() => onOpen(item)} /> : null}
-      {onOpenWorkspace && ws ? <IconBtn icon="AppWindow" label="Open workspace" onPress={() => onOpenWorkspace(ws, item.hostId)} /> : null}
-    </>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ ...style, opacity: pressed ? 0.6 : 1 })}>
+      {children}
+    </Pressable>
   );
 }
 
@@ -126,20 +126,6 @@ function HostTile({ theme, text, label, color, count, on, onPress }: {
   );
 }
 
-// Square outlined icon button; label goes to screen readers.
-function IconBtn({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={{ padding: 5, borderRadius: 8, borderWidth: 1, borderColor: `${INDIGO}73` }}
-    >
-      <Icon name={icon} size={18} color={INDIGO} />
-    </Pressable>
-  );
-}
-
 interface CardProps {
   theme: PluginTheme;
   item: InboxItem;
@@ -147,12 +133,11 @@ interface CardProps {
   compact: boolean;
   onAnswer: (item: InboxItem, behavior: "allow" | "deny", opts?: { actionId?: string }) => void;
   onOpen?: (item: InboxItem) => void;
-  onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
 }
 
 // One hairline-separated row. Wide: status dot, title, meta, age and buttons on one line.
 // Compact (phone): title + age, then meta + button; a permission request stacks its buttons below.
-function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }: CardProps) {
+function Card({ theme, item, busy, compact, onAnswer, onOpen }: CardProps) {
   const req = item.request;
   const c = theme.colors;
   const status =
@@ -164,7 +149,7 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }:
 
   const dot = <View accessibilityLabel={status.label} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: status.color }} />;
   const title = (
-    <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", flexShrink: 1 }} numberOfLines={compact ? 2 : 1}>
+    <Text style={{ color: c.foreground, fontSize: ROW.title, fontWeight: "600", flexShrink: 1 }} numberOfLines={compact ? 2 : 1}>
       {item.title}
       {item.reason === "error" ? <Text style={{ color: c.statusDanger, fontSize: FS.small, fontWeight: "400" }}>{"  error"}</Text> : null}
     </Text>
@@ -172,12 +157,11 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }:
   const rest = [item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
   const info = <><Host item={item} />{rest ? ` · ${rest}` : ""}</>;
   const meta = (
-    <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
+    <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta, flex: 1, minWidth: 0 }} numberOfLines={1}>
       {info}
     </Text>
   );
-  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flexShrink: 0 }} numberOfLines={1}>{age(item.at)}</Text>;
-  const open = <OpenButtons item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
+  const time = <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta, flexShrink: 0 }} numberOfLines={1}>{age(item.at)}</Text>;
   const answers = req ? (
     <>
       {customActions.length > 0
@@ -191,7 +175,6 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }:
             <Btn theme={theme} label="Deny" tone="bad" disabled={busy} onPress={() => onAnswer(item, "deny")} />
           </>
         )}
-      {open}
     </>
   ) : null;
   const detail = req ? (
@@ -206,19 +189,18 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }:
     </View>
   ) : null;
 
-  const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: req?.risky ? c.statusDanger : c.border, gap: 3 } as const;
+  const frame = { paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: req?.risky ? c.statusDanger : c.border, gap: 1 } as const;
 
   if (compact) {
     return (
-      <View style={{ ...frame, gap: 3 }}>
+      <Row style={frame} label={`Open ${item.title}`} onPress={onOpen ? () => onOpen(item) : undefined}>
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-          <View style={{ paddingTop: 7 }}>{dot}</View>
+          <View style={{ paddingTop: 6 }}>{dot}</View>
           <View style={{ flex: 1 }}>{title}</View>
           {time}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 19 }}>
           {meta}
-          {req ? null : open}
         </View>
         {detail}
         {req ? (
@@ -226,34 +208,34 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen, onOpenWorkspace }:
             {answers}
           </View>
         ) : null}
-      </View>
+      </Row>
     );
   }
 
   return (
-    <View style={frame}>
+    <Row style={frame} label={`Open ${item.title}`} onPress={onOpen ? () => onOpen(item) : undefined}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         {dot}
         <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
         {time}
-        {req ? answers : open}
+        {req ? answers : null}
       </View>
-      <Text style={{ color: c.foregroundMuted, fontSize: FS.small, marginLeft: 21 }} numberOfLines={1}>{info}</Text>
+      <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta, marginLeft: 21 }} numberOfLines={1}>{info}</Text>
       {detail}
-    </View>
+    </Row>
   );
 }
 
 // Copy of paseo-running's card, minus "needs you": those agents are already in the queue above.
-function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
+function RunningRow({ theme, item, now, compact, onOpen }: {
   theme: PluginTheme; item: RunningItem; now: number; compact: boolean;
-  onOpen?: (item: RunningItem) => void; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+  onOpen?: (item: RunningItem) => void;
 }) {
   const c = theme.colors;
   const quiet = (now - Date.parse(item.updatedAt)) / 60_000 >= QUIET_MIN;
   const dot = <View accessibilityLabel="running" style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: INDIGO }} />;
   const title = (
-    <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600", flexShrink: 1 }} numberOfLines={compact ? 2 : 1}>
+    <Text style={{ color: c.foreground, fontSize: ROW.title, fontWeight: "600", flexShrink: 1 }} numberOfLines={compact ? 2 : 1}>
       {item.title}
       {item.background ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{"  background tasks"}</Text> : null}
     </Text>
@@ -261,48 +243,45 @@ function RunningRow({ theme, item, now, compact, onOpen, onOpenWorkspace }: {
   const rest = [item.provider, item.project, item.workspace].filter(Boolean).join(" · ");
   const info = <><Host item={item} />{rest ? ` · ${rest}` : ""}</>;
   const meta = (
-    <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flex: 1, minWidth: 0 }} numberOfLines={1}>
+    <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta, flex: 1, minWidth: 0 }} numberOfLines={1}>
       {info}
     </Text>
   );
-  const time = <Text style={{ color: c.foregroundMuted, fontSize: FS.small, flexShrink: 0 }} numberOfLines={1}>{span(item.startedAt, now)}</Text>;
-  const open = <OpenButtons item={item} onOpen={onOpen} onOpenWorkspace={onOpenWorkspace} />;
+  const time = <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta, flexShrink: 0 }} numberOfLines={1}>{span(item.startedAt, now)}</Text>;
   // Wide rows carry host/project here; compact rows show them beside the buttons.
   const update = (
-    <Text style={{ color: c.foregroundMuted, fontSize: FS.small, marginLeft: compact ? 19 : 21 }} numberOfLines={1}>
+    <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta, marginLeft: compact ? 19 : 21 }} numberOfLines={1}>
       {compact ? null : <>{info} · </>}
       {item.model ? `${item.model} · ` : ""}
       <Text style={{ color: quiet ? c.statusWarning : c.foregroundMuted }}>last update {span(item.updatedAt, now)} ago{quiet ? " (quiet)" : ""}</Text>
     </Text>
   );
-  const frame = { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border, gap: 3 } as const;
+  const frame = { paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: c.border, gap: 1 } as const;
 
   if (compact) {
     return (
-      <View style={frame}>
+      <Row style={frame} label={`Open ${item.title}`} onPress={onOpen ? () => onOpen(item) : undefined}>
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-          <View style={{ paddingTop: 7 }}>{dot}</View>
+          <View style={{ paddingTop: 6 }}>{dot}</View>
           <View style={{ flex: 1 }}>{title}</View>
           {time}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 19 }}>
           {meta}
-          {open}
         </View>
         {update}
-      </View>
+      </Row>
     );
   }
   return (
-    <View style={frame}>
+    <Row style={frame} label={`Open ${item.title}`} onPress={onOpen ? () => onOpen(item) : undefined}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         {dot}
         <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
         {time}
-        {open}
       </View>
       {update}
-    </View>
+    </Row>
   );
 }
 
@@ -312,14 +291,14 @@ function WorkspaceLine({ theme, row, onOpenWorkspace }: {
   const c = theme.colors;
   const counts = [row.waiting ? `${row.waiting} waiting` : "", row.running ? `${row.running} running` : ""].filter(Boolean).join(" · ");
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border }}>
+    <Row label={`Open ${row.workspace || row.project}`} onPress={onOpenWorkspace ? () => onOpenWorkspace(row.workspaceId, row.hostId) : undefined}
+      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: c.border }}>
       <View accessibilityLabel={row.waiting ? "waiting" : "running"} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: row.waiting ? c.statusWarning : INDIGO }} />
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }} numberOfLines={1}>{row.workspace || row.project}</Text>
-        <Text style={{ color: c.foregroundMuted, fontSize: FS.small }} numberOfLines={1}><Host item={row} />{` · ${row.project} · ${counts}`}</Text>
+      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+        <Text style={{ color: c.foreground, fontSize: ROW.title, fontWeight: "600" }} numberOfLines={1}>{row.workspace || row.project}</Text>
+        <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta }} numberOfLines={1}><Host item={row} />{` · ${row.project} · ${counts}`}</Text>
       </View>
-      {onOpenWorkspace ? <IconBtn icon="AppWindow" label="Open workspace" onPress={() => onOpenWorkspace(row.workspaceId, row.hostId)} /> : null}
-    </View>
+    </Row>
   );
 }
 
@@ -354,19 +333,22 @@ function useCollapsed(): [Set<SectionId>, (id: SectionId) => void] {
   return [collapsed, toggle];
 }
 
-// Pressable section title with a chevron; the muted note stays visible when collapsed.
-function SectionHeader({ theme, title, note, open, first, onToggle }: {
-  theme: PluginTheme; title: string; note: string; open: boolean; first?: boolean; onToggle: () => void;
+// One framed box per section: tinted clickable header, rows below. The note stays visible when collapsed.
+function Section({ theme, title, note, open, onToggle, children }: {
+  theme: PluginTheme; title: string; note: string; open: boolean; onToggle: () => void; children?: React.ReactNode;
 }) {
   const c = theme.colors;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${open ? "collapse" : "expand"}`} accessibilityState={{ expanded: open }}
-      onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: first ? 0 : 12 }}>
-      <Icon name={open ? "ChevronDown" : "ChevronRight"} size={18} color={c.foregroundMuted} />
-      <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "600" }}>
-        {title} <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{note}</Text>
-      </Text>
-    </Pressable>
+    <View style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, overflow: "hidden" }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${open ? "collapse" : "expand"}`} accessibilityState={{ expanded: open }}
+        onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: c.surface1, borderBottomWidth: open ? 1 : 0, borderBottomColor: c.border }}>
+        <Icon name={open ? "ChevronDown" : "ChevronRight"} size={18} color={c.foregroundMuted} />
+        <Text style={{ color: c.foreground, fontSize: FS.body, fontWeight: "700" }}>
+          {title} <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>{note}</Text>
+        </Text>
+      </Pressable>
+      {open ? children : null}
+    </View>
   );
 }
 
@@ -449,55 +431,34 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         </View>
       ) : (
         <>
-          <SectionHeader theme={theme} title="Waiting on you" first open={!collapsed.has("waiting")} onToggle={() => toggle("waiting")}
-            note={!loaded ? "loading…" : !items.length ? "none" : `${items.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`} />
-          {collapsed.has("waiting") ? null : (
-            <View>
-              {items.map((item) => (
-                <Card key={item.key} theme={theme} item={item}
-                  busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
-              ))}
-            </View>
-          )}
+          <Section theme={theme} title="Waiting on you" open={!collapsed.has("waiting")} onToggle={() => toggle("waiting")}
+            note={!loaded ? "loading…" : !items.length ? "none" : `${items.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
+            {items.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
+          </Section>
 
           {running.length > 0 ? (
-            <>
-              <SectionHeader theme={theme} title="Running" note={`${running.length} working now, newest first`} open={!collapsed.has("running")} onToggle={() => toggle("running")} />
-              {collapsed.has("running") ? null : (
-                <View>
-                  {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} onOpenWorkspace={openWorkspace} />)}
-                </View>
-              )}
-            </>
+            <Section theme={theme} title="Running" note={`${running.length} working now, newest first`} open={!collapsed.has("running")} onToggle={() => toggle("running")}>
+              {running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
+            </Section>
           ) : null}
 
-          <SectionHeader theme={theme} title="Done" open={!collapsed.has("done")} onToggle={() => toggle("done")}
-            note={!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"} />
-          {collapsed.has("done") ? null : (
-            <View>
-              {done.map((item) => (
-                <Card key={item.key} theme={theme} item={item}
-                  busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
-              ))}
-            </View>
-          )}
+          <Section theme={theme} title="Done" open={!collapsed.has("done")} onToggle={() => toggle("done")}
+            note={!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"}>
+            {done.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
+          </Section>
 
-          <SectionHeader theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
-            note={archive.items.length ? `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"} />
-          {collapsed.has("archive") ? null : (
-            <View>
-              {archive.items.map((item) => (
-                <Card key={item.key} theme={theme} item={item}
-                  busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} onOpenWorkspace={openWorkspace} />
-              ))}
-              {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, marginTop: 6 }}>Not loaded: {archive.error}</Text> : null}
-              {archive.more && archive.items.length > 0 ? (
-                <View style={{ alignItems: "flex-start", marginTop: 10 }}>
-                  <Btn theme={theme} label={archive.loading ? "Loading…" : "Load more"} disabled={archive.loading} onPress={archive.loadMore} />
-                </View>
-              ) : null}
-            </View>
-          )}
+          <Section theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
+            note={archive.items.length ? `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"}>
+            {archive.items.map((item) => (
+              <Card key={item.key} theme={theme} item={item} busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} />
+            ))}
+            {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, margin: 8 }}>Not loaded: {archive.error}</Text> : null}
+            {archive.more && archive.items.length > 0 ? (
+              <View style={{ alignItems: "flex-start", padding: 8 }}>
+                <Btn theme={theme} label={archive.loading ? "Loading…" : "Load more"} disabled={archive.loading} onPress={archive.loadMore} />
+              </View>
+            ) : null}
+          </Section>
         </>
       )}
     </ScrollView>
