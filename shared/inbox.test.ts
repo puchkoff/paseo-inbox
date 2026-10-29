@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectArchive, collectDone, collectInbox, sortInbox } from "./inbox.ts";
+import { collectArchive, collectDone, collectInbox, isClosedSubagent, sortInbox } from "./inbox.ts";
 
 const agent = (over: Record<string, unknown>) => ({
   id: "a1", title: "T", provider: "claude", workspaceId: "w1", cwd: "/home/u/old-app", updatedAt: "2026-01-01T00:00:00Z",
@@ -81,4 +81,13 @@ test("archive pages until it has archived agents and keeps the cursor for Load m
   assert.deepEqual(r.items.map((i) => [i.agentId, i.workspaceId, i.workspace]), [["arch", "w1", "main"], ["inGoneWs", null, "old-app"]]);
   assert.deepEqual(cursors, [undefined, "c1"]);
   assert.equal(r.cursor, null);
+});
+
+test("a delegated agent with no open tab is closed; its parent-less siblings are not", () => {
+  const parent = { "paseo.parent-agent-id": "p" };
+  assert.equal(isClosedSubagent(parent), true);
+  assert.equal(isClosedSubagent({ ...parent, "paseo.open-agent-tab.c1": "false" }), true);
+  assert.equal(isClosedSubagent({ ...parent, "paseo.open-agent-tab.c1": "false", "paseo.open-agent-tab.c2": "true" }), false);
+  assert.equal(isClosedSubagent({}), false);
+  assert.equal(isClosedSubagent(undefined), false);
 });

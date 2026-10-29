@@ -96,6 +96,14 @@ export async function collectInbox(paseo: PaseoApi): Promise<Omit<InboxItem, "ho
   return items;
 }
 
+// Closing the tab of a delegated agent (one with a parent) only hides it; the app archives every other agent
+// on close. An open tab is marked per client with "paseo.open-agent-tab.<clientId>": "true".
+export function isClosedSubagent(labels: Record<string, string> | undefined): boolean {
+  const l = labels ?? {};
+  if (!l["paseo.parent-agent-id"]) return false;
+  return !Object.entries(l).some(([k, v]) => k.startsWith("paseo.open-agent-tab.") && v === "true");
+}
+
 const DONE_MAX = 15;
 const DONE_WINDOW_MS = 24 * 3600_000;
 
@@ -110,7 +118,7 @@ export async function collectDone(paseo: PaseoApi, now = Date.now()): Promise<Om
     .map((e) => e.agent)
     .filter((a) => {
       const ws = a.workspaceId ? workspaces.get(a.workspaceId) : undefined;
-      return !a.archivedAt && !(a.workspaceId && !ws) && a.pendingPermissions.length === 0
+      return !a.archivedAt && !(a.workspaceId && !ws) && !isClosedSubagent(a.labels) && a.pendingPermissions.length === 0
         && a.attentionReason !== "error" && now - Date.parse(a.updatedAt) < DONE_WINDOW_MS;
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -130,7 +138,7 @@ const ARCHIVE_WANT = 20;
 
 // One host's archived agents, newest first, from `cursor` on. The API has no archived-only filter, so this pages
 // through every agent until it has ARCHIVE_WANT archived ones; cursor is null once the host has no more.
-// An agent in an archived workspace counts as archived (its archivedAt stays null).
+// An agent in an archived workspace, or a delegated agent whose tab was closed, counts as archived.
 export async function collectArchive(paseo: PaseoApi, cursor?: string): Promise<{ items: Omit<InboxItem, "hostId" | "hostLabel">[]; cursor: string | null }> {
   const workspaces = await workspaceIndex(paseo);
   const items: Omit<InboxItem, "hostId" | "hostLabel">[] = [];
@@ -143,7 +151,7 @@ export async function collectArchive(paseo: PaseoApi, cursor?: string): Promise<
     });
     for (const { agent: a } of page.entries) {
       const ws = a.workspaceId ? workspaces.get(a.workspaceId) : undefined;
-      if (!a.archivedAt && !(a.workspaceId && !ws)) continue;
+      if (!a.archivedAt && !(a.workspaceId && !ws) && !isClosedSubagent(a.labels)) continue;
       items.push({
         key: `${a.id}:archived`, agentId: a.id, title: a.title ?? a.id.slice(0, 8), provider: a.provider,
         projectId: ws?.projectId ?? null, workspaceId: ws ? a.workspaceId ?? null : null, project: ws?.project ?? "", workspace: ws?.workspace ?? (a.cwd.split("/").filter(Boolean).pop() ?? ""),
