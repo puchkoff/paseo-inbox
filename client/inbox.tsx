@@ -3,11 +3,12 @@ import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { useHosts } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import type { InboxItem } from "../shared/inbox.ts";
 import type { RunningItem } from "../shared/running.ts";
 import { initials } from "../shared/hosts.ts";
 import { groupByWorkspace, type WorkspaceRow } from "../shared/workspaces.ts";
+import { matches } from "../shared/search.ts";
 import { answer, useArchive, useInbox } from "./use-inbox.ts";
 
 // One scale for the whole screen. 26/17/15/13.5 read too small, 29/19/17/15 too big.
@@ -361,7 +362,11 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const [view, setView] = useState<"agents" | "workspaces">("agents");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [collapsed, toggle] = useCollapsed();
-  const [wsTarget, setWsTarget] = useState(WS_PAGE);
+  const [archiveTarget, setArchiveTarget] = useState(WS_PAGE);
+  const [query, setQuery] = useState("");
+  const q = query.trim();
+  // A search opens every section so matches are never hidden.
+  const isOpen = (id: SectionId) => !!q || !collapsed.has(id);
   const { items: allItems, running: allRunning, done: allDone, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
   // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
@@ -377,7 +382,9 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
-  const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], !collapsed.has("archive"));
+  const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], isOpen("archive"));
+  const match = (i: Parameters<typeof matches>[0]) => matches(i, q);
+  const shown = { waiting: items.filter(match), running: running.filter(match), done: done.filter(match), archive: archive.items.filter(match) };
 
   // Re-render each 15 s so the elapsed times advance between polls.
   const [now, setNow] = useState(Date.now());
@@ -400,15 +407,17 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
   const openAgent = navigation ? (item: InboxItem | RunningItem) => navigation.openAgent({ agentId: item.agentId, serverId: item.hostId }) : undefined;
   const openWorkspace = navigation ? (workspaceId: string, serverId: string) => navigation.openWorkspace({ workspaceId, serverId }) : undefined;
-  const pending = items.filter((i) => i.reason === "permission").length;
+  const pending = shown.waiting.filter((i) => i.reason === "permission").length;
   const byWs = view === "workspaces";
-  // Workspaces view: archived agents cluster in few workspaces, so keep loading until the page has wsTarget rows.
-  const archiveWs = groupByWorkspace(archive.items).length;
-  // New scope starts from an empty archive, so start the target over too.
-  useEffect(() => setWsTarget(WS_PAGE), [scope]);
+  // Archived agents cluster in few workspaces and a search drops most of them, so in those cases
+  // keep loading until archiveTarget rows are on screen; otherwise one load = one Load more.
+  const archiveRows = byWs ? groupByWorkspace(shown.archive).length : shown.archive.length;
+  const autoLoad = byWs || !!q;
+  const archiveFilling = autoLoad && archiveRows < archiveTarget && archive.more && !archive.error;
+  useEffect(() => setArchiveTarget(WS_PAGE), [scope, q]);
   useEffect(() => {
-    if (byWs && !collapsed.has("archive") && archive.items.length > 0 && archive.more && !archive.loading && !archive.error && archiveWs < wsTarget) archive.loadMore();
-  }, [byWs, collapsed, archive, archiveWs, wsTarget]);
+    if (archiveFilling && isOpen("archive") && archive.items.length > 0 && !archive.loading) archive.loadMore();
+  });
   const wsRows = (list: Parameters<typeof groupByWorkspace>[0], color: string) =>
     groupByWorkspace(list).map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} color={color} onOpenWorkspace={openWorkspace} />);
 
@@ -433,35 +442,45 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
+        <View style={{ flex: 1, minWidth: 220, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 10, backgroundColor: c.surface1 }}>
+          <Icon name="Search" size={16} color={c.foregroundMuted} />
+          <TextInput value={query} onChangeText={setQuery} placeholder="Search agents, projects, workspaces, hosts" placeholderTextColor={c.foregroundMuted}
+            accessibilityLabel="Search" style={{ flex: 1, color: c.foreground, fontSize: FS.small, paddingVertical: 7, outlineStyle: "none" } as object} />
+          {query ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")}>
+              <Icon name="X" size={16} color={c.foregroundMuted} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
-      <Section theme={theme} title="Waiting on you" open={!collapsed.has("waiting")} onToggle={() => toggle("waiting")}
-        note={!loaded ? "loading…" : !items.length ? "none" : `${items.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
-        {byWs ? wsRows(items, c.statusWarning) : items.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
+      <Section theme={theme} title="Waiting on you" open={isOpen("waiting")} onToggle={() => toggle("waiting")}
+        note={!loaded ? "loading…" : !shown.waiting.length ? (q ? "no matches" : "none") : `${shown.waiting.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
+        {byWs ? wsRows(shown.waiting, c.statusWarning) : shown.waiting.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
       </Section>
 
-      {running.length > 0 ? (
-        <Section theme={theme} title="Running" note={`${running.length} working now, newest first`} open={!collapsed.has("running")} onToggle={() => toggle("running")}>
-          {byWs ? wsRows(running, INDIGO) : running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
+      {shown.running.length > 0 ? (
+        <Section theme={theme} title="Running" note={`${shown.running.length} working now, newest first`} open={isOpen("running")} onToggle={() => toggle("running")}>
+          {byWs ? wsRows(shown.running, INDIGO) : shown.running.map((item) => <RunningRow key={item.key} theme={theme} item={item} now={now} compact={layout.compact} onOpen={openAgent} />)}
         </Section>
       ) : null}
 
-      <Section theme={theme} title="Done" open={!collapsed.has("done")} onToggle={() => toggle("done")}
-        note={!loaded ? "loading…" : done.length ? `${done.length} finished in the last 24 h, newest first` : "none in the last 24 h"}>
-        {byWs ? wsRows(done, c.statusSuccess) : done.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
+      <Section theme={theme} title="Done" open={isOpen("done")} onToggle={() => toggle("done")}
+        note={!loaded ? "loading…" : shown.done.length ? `${shown.done.length} finished in the last 24 h, newest first` : q ? "no matches in the last 24 h" : "none in the last 24 h"}>
+        {byWs ? wsRows(shown.done, c.statusSuccess) : shown.done.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
       </Section>
 
-      <Section theme={theme} title="Archive" open={!collapsed.has("archive")} onToggle={() => toggle("archive")}
-        note={archive.items.length ? byWs ? `${archiveWs}${archive.more ? "+" : ""} workspaces, newest first` : `${archive.items.length}${archive.more ? "+" : ""} archived, newest first` : archive.loading ? "loading…" : collapsed.has("archive") ? "archived agents" : "none"}>
-        {byWs ? wsRows(archive.items, c.foregroundMuted) : archive.items.map((item) => (
+      <Section theme={theme} title="Archive" open={isOpen("archive")} onToggle={() => toggle("archive")}
+        note={archive.items.length ? `${archiveRows}${archive.more ? "+" : ""} ${byWs ? "workspaces" : "archived"}${q ? " matching" : ""}, newest first` : archive.loading ? "loading…" : isOpen("archive") ? "none" : "archived agents"}>
+        {byWs ? wsRows(shown.archive, c.foregroundMuted) : shown.archive.map((item) => (
           <Card key={item.key} theme={theme} item={item} busy={false} compact={layout.compact} onAnswer={() => {}} onOpen={openAgent} />
         ))}
         {archive.error ? <Text style={{ color: c.statusWarning, fontSize: FS.small, margin: 8 }}>Not loaded: {archive.error}</Text> : null}
         {archive.more && archive.items.length > 0 ? (
           <View style={{ alignItems: "flex-start", padding: 8 }}>
-            <Btn theme={theme} label={archive.loading || (byWs && archiveWs < wsTarget && !archive.error) ? "Loading…" : "Load more"} disabled={archive.loading || (byWs && archiveWs < wsTarget && !archive.error)} onPress={byWs ? () => setWsTarget(archiveWs + WS_PAGE) : archive.loadMore} />
+            <Btn theme={theme} label={archive.loading || archiveFilling ? "Loading…" : "Load more"} disabled={archive.loading || archiveFilling} onPress={autoLoad ? () => setArchiveTarget(archiveRows + WS_PAGE) : archive.loadMore} />
           </View>
         ) : null}
       </Section>
