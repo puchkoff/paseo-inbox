@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" width="96" alt="Inbox logo"></p>
+
 # Inbox — a Paseo plugin
 
 ![Inbox: Paseo plugin screen (illustration)](docs/hero.svg)
