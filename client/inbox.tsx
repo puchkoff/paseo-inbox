@@ -50,8 +50,8 @@ const INDIGO = "#6366f1";
 // ok = filled primary, pri = outlined primary, bad = outlined danger, plain = quiet chip, on = selected chip.
 type Tone = "ok" | "bad" | "pri" | "plain" | "on";
 
-function Btn({ theme, label, tone = "plain", disabled, onPress }: {
-  theme: PluginTheme; label: string; tone?: Tone; disabled?: boolean; onPress: () => void;
+function Btn({ theme, label, tone = "plain", disabled, small, onPress }: {
+  theme: PluginTheme; label: string; tone?: Tone; disabled?: boolean; small?: boolean; onPress: () => void;
 }) {
   const c = theme.colors;
   const look = {
@@ -67,9 +67,9 @@ function Btn({ theme, label, tone = "plain", disabled, onPress }: {
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: look.border, backgroundColor: look.bg, opacity: disabled ? 0.4 : 1 }}
+      style={{ paddingHorizontal: small ? 8 : 12, paddingVertical: small ? 2 : 4, borderRadius: 8, borderWidth: 1, borderColor: look.border, backgroundColor: look.bg, opacity: disabled ? 0.4 : 1 }}
     >
-      <Text style={{ color: look.fg, fontSize: FS.small }}>{label}</Text>
+      <Text style={{ color: look.fg, fontSize: small ? FS.tiny : FS.small }}>{label}</Text>
     </Pressable>
   );
 }
@@ -365,8 +365,8 @@ function Section({ theme, title, icon, color, note, open, onToggle, children }: 
 
 // New workspace (worktree for git projects) with a Claude agent on the given prompt, then opens it.
 // shortcut: provider fixed to claude on its default model, no mode pick; add a picker if another provider is wanted.
-function NewWorkspace({ theme, serverId, onOpenWorkspace, onClose }: {
-  theme: PluginTheme; serverId: string; onOpenWorkspace?: (workspaceId: string, serverId: string) => void; onClose: () => void;
+function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
+  theme: PluginTheme; compact: boolean; serverId: string; onOpenWorkspace?: (workspaceId: string, serverId: string) => void; onClose: () => void;
 }) {
   const c = theme.colors;
   const toast = useToast();
@@ -405,13 +405,13 @@ function NewWorkspace({ theme, serverId, onOpenWorkspace, onClose }: {
     }
   }
   return (
-    <View style={{ gap: 8, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 12, backgroundColor: c.surface1 }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+    <View style={{ gap: compact ? 6 : 8, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: compact ? 8 : 12, backgroundColor: c.surface1 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: compact ? 4 : 6 }}>
         {projects === null ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>loading projects…</Text>
-          : projects.map((p) => <Btn key={p.id} theme={theme} label={p.name} tone={pick === p.id ? "on" : "plain"} onPress={() => setPick(p.id)} />)}
+          : projects.map((p) => <Btn key={p.id} theme={theme} label={p.name} tone={pick === p.id ? "on" : "plain"} small={compact} onPress={() => setPick(p.id)} />)}
       </View>
       <TextInput value={prompt} onChangeText={setPrompt} placeholder="What should the agent do?" placeholderTextColor={c.foregroundMuted} multiline
-        accessibilityLabel="Agent prompt" style={{ minHeight: 70, color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, outlineStyle: "none" } as object} />
+        accessibilityLabel="Agent prompt" style={{ minHeight: compact ? 44 : 70, color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, outlineStyle: "none" } as object} />
       <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
         <Btn theme={theme} label="Cancel" onPress={onClose} />
         <Btn theme={theme} label={busy ? "Starting…" : "Start"} tone="ok" disabled={busy || !project || !prompt.trim()} onPress={() => void start()} />
@@ -503,10 +503,15 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
             ))}
           </View>
         ) : null}
-        <Btn theme={theme} label="+ New workspace" tone="pri" onPress={() => setCreating(!creating)} />
+        {layout.compact ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="New workspace" accessibilityState={{ expanded: creating }} onPress={() => setCreating(!creating)}
+            style={{ width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: `${INDIGO}73`, alignItems: "center", justifyContent: "center" }}>
+            <Icon name={creating ? "X" : "Plus"} size={18} color={INDIGO} />
+          </Pressable>
+        ) : <Btn theme={theme} label="+ New workspace" tone="pri" onPress={() => setCreating(!creating)} />}
       </View>
 
-      {creating ? <NewWorkspace theme={theme} serverId={scope === "all" ? host.id : scope} onOpenWorkspace={openWorkspace} onClose={() => setCreating(false)} /> : null}
+      {creating ? <NewWorkspace theme={theme} compact={layout.compact} serverId={scope === "all" ? host.id : scope} onOpenWorkspace={openWorkspace} onClose={() => setCreating(false)} /> : null}
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
