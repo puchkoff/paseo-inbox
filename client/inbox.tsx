@@ -384,7 +384,7 @@ function Picker({ theme, icon, title, value, options, search, onChange }: {
       <Modal title={title} open={open} onOpenChange={show}>
         <Modal.Content contentContainerStyle={{ padding: 8, gap: 0 }}>
           {search ? (
-            <TextInput value={q} onChangeText={setQ} placeholder="Search models" placeholderTextColor={c.foregroundMuted} autoFocus accessibilityLabel="Search models"
+            <TextInput value={q} onChangeText={setQ} placeholder="Search" placeholderTextColor={c.foregroundMuted} autoFocus accessibilityLabel={`Search ${title}`}
               style={{ color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, marginBottom: 4, outlineStyle: "none" } as object} />
           ) : null}
           {search && !shown.length ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small, padding: 12 }}>no matches</Text> : null}
@@ -408,7 +408,7 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
 }) {
   const c = theme.colors;
   const toast = useToast();
-  const [projects, setProjects] = useState<{ id: string; name: string; path: string; git: boolean }[] | null>(null);
+  const [projects, setProjects] = useState<{ id: string; label: string; path: string; git: boolean }[] | null>(null);
   const [pick, setPick] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -431,7 +431,7 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
   useEffect(() => {
     let live = true;
     getPaseoClient(serverId).projects.list()
-      .then((r) => { if (live) setProjects(r.projects.map((p) => ({ id: p.projectId, name: p.projectDisplayName, path: p.projectRootPath, git: p.projectKind === "git" }))); })
+      .then((r) => { if (live) setProjects(r.projects.map((p) => ({ id: p.projectId, label: p.projectDisplayName, path: p.projectRootPath, git: p.projectKind === "git" }))); })
       .catch((e) => { if (live) { setProjects([]); toast.error(e instanceof Error ? e.message : String(e)); } });
     return () => { live = false; };
   }, [serverId]);
@@ -457,13 +457,10 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
   }
   return (
     <View style={{ gap: compact ? 6 : 8, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: compact ? 8 : 12, backgroundColor: c.surface1 }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: compact ? 4 : 6 }}>
-        {projects === null ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>loading projects…</Text>
-          : projects.map((p) => <Btn key={p.id} theme={theme} label={p.name} tone={pick === p.id ? "on" : "plain"} small={compact} onPress={() => setPick(p.id)} />)}
-      </View>
       <TextInput value={prompt} onChangeText={setPrompt} placeholder="What should the agent do?" placeholderTextColor={c.foregroundMuted} multiline
         accessibilityLabel="Agent prompt" style={{ minHeight: compact ? 44 : 70, color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, outlineStyle: "none" } as object} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <Picker theme={theme} icon="Folder" title="Project" value={pick} options={projects ?? []} search onChange={setPick} />
         <Picker theme={theme} icon="Bot" title="Model" value={modelId} options={models} search onChange={(id) => pickModel(models.find((m) => m.id === id))} />
         {model?.thinkingOptions?.length ? <Picker theme={theme} icon="Brain" title="Effort" value={effort} options={model.thinkingOptions} onChange={setEffort} /> : null}
         <View style={{ flexDirection: "row", gap: 8, marginLeft: "auto" }}>
