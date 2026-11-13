@@ -364,24 +364,32 @@ function Section({ theme, title, icon, color, note, open, onToggle, children }: 
 }
 
 // Pill that opens a list in the app's modal, like the model/effort controls of the Paseo composer.
-function Picker({ theme, icon, title, value, options, onChange }: {
-  theme: PluginTheme; icon: string; title: string; value: string | null; options: { id: string; label: string }[]; onChange: (id: string) => void;
+function Picker({ theme, icon, title, value, options, search, onChange }: {
+  theme: PluginTheme; icon: string; search?: boolean; title: string; value: string | null; options: { id: string; label: string }[]; onChange: (id: string) => void;
 }) {
   const c = theme.colors;
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const shown = q.trim() ? options.filter((o) => `${o.label} ${o.id}`.toLowerCase().includes(q.trim().toLowerCase())) : options;
+  const show = (v: boolean) => { setOpen(v); if (!v) setQ(""); };
   const current = options.find((o) => o.id === value)?.label ?? title;
   return (
     <>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${title}: ${current}`} onPress={() => setOpen(true)}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${title}: ${current}`} onPress={() => show(true)}
         style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: c.surface2, opacity: pressed ? 0.6 : 1 })}>
         <Icon name={icon} size={14} color={c.foregroundMuted} />
         <Text style={{ color: c.foreground, fontSize: FS.tiny }}>{current}</Text>
         <Icon name="ChevronDown" size={14} color={c.foregroundMuted} />
       </Pressable>
-      <Modal title={title} open={open} onOpenChange={setOpen}>
+      <Modal title={title} open={open} onOpenChange={show}>
         <Modal.Content contentContainerStyle={{ padding: 8, gap: 0 }}>
-          {options.map((o) => (
-            <Pressable key={o.id} accessibilityRole="button" accessibilityState={{ selected: o.id === value }} onPress={() => { onChange(o.id); setOpen(false); }}
+          {search ? (
+            <TextInput value={q} onChangeText={setQ} placeholder="Search models" placeholderTextColor={c.foregroundMuted} autoFocus accessibilityLabel="Search models"
+              style={{ color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, marginBottom: 4, outlineStyle: "none" } as object} />
+          ) : null}
+          {search && !shown.length ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small, padding: 12 }}>no matches</Text> : null}
+          {shown.map((o) => (
+            <Pressable key={o.id} accessibilityRole="button" accessibilityState={{ selected: o.id === value }} onPress={() => { onChange(o.id); show(false); }}
               style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: pressed ? c.surface2 : "transparent" })}>
               <Text style={{ flex: 1, color: c.foreground, fontSize: FS.small }}>{o.label}</Text>
               {o.id === value ? <Icon name="Check" size={16} color={INDIGO} /> : null}
@@ -456,7 +464,7 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
       <TextInput value={prompt} onChangeText={setPrompt} placeholder="What should the agent do?" placeholderTextColor={c.foregroundMuted} multiline
         accessibilityLabel="Agent prompt" style={{ minHeight: compact ? 44 : 70, color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, outlineStyle: "none" } as object} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <Picker theme={theme} icon="Bot" title="Model" value={modelId} options={models} onChange={(id) => pickModel(models.find((m) => m.id === id))} />
+        <Picker theme={theme} icon="Bot" title="Model" value={modelId} options={models} search onChange={(id) => pickModel(models.find((m) => m.id === id))} />
         {model?.thinkingOptions?.length ? <Picker theme={theme} icon="Brain" title="Effort" value={effort} options={model.thinkingOptions} onChange={setEffort} /> : null}
         <View style={{ flexDirection: "row", gap: 8, marginLeft: "auto" }}>
           <Btn theme={theme} label="Cancel" onPress={onClose} />
