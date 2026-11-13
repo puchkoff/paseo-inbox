@@ -465,7 +465,6 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const items = scoped.filter((i) => i.reason !== "finished");
   // An idle agent in a still-working workspace is already in Running as background tasks.
   const done = (scope === "all" ? allDone : allDone.filter((i) => i.hostId === scope)).filter((i) => !allRunning.some((r) => r.hostId === i.hostId && r.agentId === i.agentId));
-  const scopeLabel = scope === "all" ? "all hosts" : hosts.find((h) => h.serverId === scope)?.label ?? "";
   const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
   const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], isOpen("archive"));
@@ -512,7 +511,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Text style={{ color: c.foreground, fontSize: FS.title, fontWeight: "600", flex: 1 }}>
           Inbox <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>
-            {[items.length ? `${items.length} waiting on you` : "", hosts.length > 1 ? scopeLabel : ""].filter(Boolean).join(" · ")}
+            {items.length ? `${items.length} waiting on you` : ""}
           </Text>
         </Text>
         {hosts.length > 1 ? (
