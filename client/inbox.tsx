@@ -364,7 +364,7 @@ function Section({ theme, title, icon, color, note, open, onToggle, children }: 
 }
 
 // New workspace (worktree for git projects) with a Claude agent on the given prompt, then opens it.
-// shortcut: provider fixed to claude on its default model, no mode pick; add a picker if another provider is wanted.
+// shortcut: provider fixed to claude, no mode pick; add a picker if another provider is wanted.
 function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
   theme: PluginTheme; compact: boolean; serverId: string; onOpenWorkspace?: (workspaceId: string, serverId: string) => void; onClose: () => void;
 }) {
@@ -374,6 +374,22 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
   const [pick, setPick] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  type Model = { id: string; label: string; isDefault?: boolean; thinkingOptions?: { id: string; label: string }[]; defaultThinkingOptionId?: string };
+  const [models, setModels] = useState<Model[]>([]);
+  const [modelId, setModelId] = useState<string | null>(null);
+  const [effort, setEffort] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    getPaseoClient(serverId).providers.listModels("claude")
+      .then((r) => { if (live) { const list = r.models ?? []; setModels(list); pickModel(list.find((m) => m.isDefault) ?? list[0]); } })
+      .catch((e) => { if (live) toast.error(e instanceof Error ? e.message : String(e)); });
+    return () => { live = false; };
+  }, [serverId]);
+  function pickModel(m: Model | undefined) {
+    setModelId(m?.id ?? null);
+    setEffort(m?.defaultThinkingOptionId ?? null);
+  }
+  const model = models.find((m) => m.id === modelId);
   useEffect(() => {
     let live = true;
     getPaseoClient(serverId).projects.list()
@@ -383,18 +399,15 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
   }, [serverId]);
   const project = projects?.find((p) => p.id === pick);
   async function start() {
-    if (!project || !prompt.trim()) return;
+    if (!project || !model || !prompt.trim()) return;
     setBusy(true);
     try {
       const paseo = getPaseoClient(serverId);
-      const models = (await paseo.providers.listModels("claude")).models ?? [];
-      const model = (models.find((m) => m.isDefault) ?? models[0])?.id;
-      if (!model) throw new Error("no Claude model on this host");
       const ws = await paseo.workspaces.create({
         // Non-git projects can't have a worktree, so they get a plain directory workspace.
         source: project.git ? { kind: "worktree", cwd: project.path, projectId: project.id } : { kind: "directory", path: project.path, projectId: project.id },
         firstAgentContext: { prompt: prompt.trim() },
-        agent: { config: { provider: `claude/${model}` }, cwd: project.path, prompt: prompt.trim() },
+        agent: { config: { provider: `claude/${model.id}`, thinkingOptionId: effort ?? undefined }, cwd: project.path, prompt: prompt.trim() },
       });
       onClose();
       onOpenWorkspace?.(ws.id, serverId);
@@ -410,11 +423,19 @@ function NewWorkspace({ theme, compact, serverId, onOpenWorkspace, onClose }: {
         {projects === null ? <Text style={{ color: c.foregroundMuted, fontSize: FS.small }}>loading projects…</Text>
           : projects.map((p) => <Btn key={p.id} theme={theme} label={p.name} tone={pick === p.id ? "on" : "plain"} small={compact} onPress={() => setPick(p.id)} />)}
       </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: compact ? 4 : 6 }}>
+        {models.map((m) => <Btn key={m.id} theme={theme} label={m.label} tone={modelId === m.id ? "on" : "plain"} small onPress={() => pickModel(m)} />)}
+      </View>
+      {model?.thinkingOptions?.length ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: compact ? 4 : 6 }}>
+          {model.thinkingOptions.map((t) => <Btn key={t.id} theme={theme} label={t.label} tone={effort === t.id ? "on" : "plain"} small onPress={() => setEffort(t.id)} />)}
+        </View>
+      ) : null}
       <TextInput value={prompt} onChangeText={setPrompt} placeholder="What should the agent do?" placeholderTextColor={c.foregroundMuted} multiline
         accessibilityLabel="Agent prompt" style={{ minHeight: compact ? 44 : 70, color: c.foreground, fontSize: FS.small, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8, outlineStyle: "none" } as object} />
       <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
         <Btn theme={theme} label="Cancel" onPress={onClose} />
-        <Btn theme={theme} label={busy ? "Starting…" : "Start"} tone="ok" disabled={busy || !project || !prompt.trim()} onPress={() => void start()} />
+        <Btn theme={theme} label={busy ? "Starting…" : "Start"} tone="ok" disabled={busy || !project || !model || !prompt.trim()} onPress={() => void start()} />
       </View>
     </View>
   );
@@ -491,7 +512,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Text style={{ color: c.foreground, fontSize: FS.title, fontWeight: "600", flex: 1 }}>
           Inbox <Text style={{ color: c.foregroundMuted, fontSize: FS.small, fontWeight: "400" }}>
-            {items.length ? `${items.length} waiting on you` : "all clear"}{hosts.length > 1 ? ` · ${scopeLabel}` : ""}
+            {[items.length ? `${items.length} waiting on you` : "", hosts.length > 1 ? scopeLabel : ""].filter(Boolean).join(" · ")}
           </Text>
         </Text>
         {hosts.length > 1 ? (
