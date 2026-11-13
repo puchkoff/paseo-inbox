@@ -549,7 +549,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
-      <Section theme={theme} title="Waiting on you" icon="Hourglass" color={c.statusWarning} open={isOpen("waiting")} onToggle={() => toggle("waiting")}
+      <Section theme={theme} title="Waiting on you" icon="Hand" color={c.statusWarning} open={isOpen("waiting")} onToggle={() => toggle("waiting")}
         note={!loaded ? "loading…" : !shown.waiting.length ? (q ? "no matches" : "none") : `${shown.waiting.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
         {byWs ? wsRows(shown.waiting, c.statusWarning) : shown.waiting.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
       </Section>

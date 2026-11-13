@@ -28,7 +28,7 @@ function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps)
       onPress={() => openScreen({ screenId: "inbox" })}
       trailing={waiting > 0 || working > 0 ? (
         <View style={{ flexDirection: "row", gap: 4, marginRight: 8 }}>
-          <Badge count={waiting} icon="Hourglass" label="waiting on you" color={c.statusWarning} fg={c.accentForeground} />
+          <Badge count={waiting} icon="Hand" label="waiting on you" color={c.statusWarning} fg={c.accentForeground} />
           <Badge count={working} icon="Activity" label="running" color={c.accent} fg={c.accentForeground} />
         </View>
       ) : null}
