@@ -503,18 +503,16 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
             ))}
           </View>
         ) : null}
+      </View>
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
         {layout.compact ? (
           <Pressable accessibilityRole="button" accessibilityLabel="New workspace" accessibilityState={{ expanded: creating }} onPress={() => setCreating(!creating)}
             style={{ width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: `${INDIGO}73`, alignItems: "center", justifyContent: "center" }}>
             <Icon name={creating ? "X" : "Plus"} size={18} color={INDIGO} />
           </Pressable>
         ) : <Btn theme={theme} label="+ New workspace" tone="pri" onPress={() => setCreating(!creating)} />}
-      </View>
-
-      {creating ? <NewWorkspace theme={theme} compact={layout.compact} serverId={scope === "all" ? host.id : scope} onOpenWorkspace={openWorkspace} onClose={() => setCreating(false)} /> : null}
-
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <Seg theme={theme} value={view} onChange={setView} options={[{ id: "agents", label: "Agents", icon: "Bot" }, { id: "workspaces", label: "Workspaces", icon: "AppWindow" }]} />
         <View style={{ flex: 1, minWidth: 220, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 10, backgroundColor: c.surface1 }}>
           <Icon name="Search" size={16} color={c.foregroundMuted} />
           <TextInput value={query} onChangeText={setQuery} placeholder="Search agents, projects, workspaces, hosts" placeholderTextColor={c.foregroundMuted}
@@ -526,6 +524,8 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
           ) : null}
         </View>
       </View>
+
+      {creating ? <NewWorkspace theme={theme} compact={layout.compact} serverId={scope === "all" ? host.id : scope} onOpenWorkspace={openWorkspace} onClose={() => setCreating(false)} /> : null}
 
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
