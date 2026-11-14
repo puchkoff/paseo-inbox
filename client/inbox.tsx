@@ -287,21 +287,35 @@ function RunningRow({ theme, item, now, compact, onOpen }: {
 }
 
 function WorkspaceLine({ theme, row, color, onOpenWorkspace }: {
-  theme: PluginTheme; row: WorkspaceRow; color: string; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
+  theme: PluginTheme; row: WorkspaceRow<{ hostId: string; hostLabel: string; workspaceId: string | null; project: string; workspace: string; title: string }>;
+  color: string; onOpenWorkspace?: (workspaceId: string, hostId: string) => void;
 }) {
   const c = theme.colors;
   const ws = row.workspaceId;
+  const [open, setOpen] = useState(false);
+  const n = row.agents.length;
   return (
-    <Row label={`Open ${row.workspace || row.project}`} onPress={onOpenWorkspace && ws ? () => onOpenWorkspace(ws, row.hostId) : undefined}
-      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: c.border }}>
-      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color }} />
-      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-        <Text style={{ color: c.foreground, fontSize: ROW.title, fontWeight: "600" }} numberOfLines={1}>{row.workspace || row.project}</Text>
-        <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta }} numberOfLines={1}>
-          <Host item={row} />{[row.project, `${row.agents} agent${row.agents === 1 ? "" : "s"}`, ws ? "" : "workspace archived"].filter(Boolean).map((t) => ` · ${t}`).join("")}
-        </Text>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: c.border }}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${open ? "Hide" : "Show"} agents`} accessibilityState={{ expanded: open }}
+          onPress={() => setOpen(!open)} style={{ paddingVertical: 5, paddingLeft: 8, paddingRight: 4 }}>
+          <Text style={{ color: c.foregroundMuted, fontSize: ROW.title, width: 14 }}>{open ? "▾" : "▸"}</Text>
+        </Pressable>
+        <Row label={`Open ${row.workspace || row.project}`} onPress={onOpenWorkspace && ws ? () => onOpenWorkspace(ws, row.hostId) : undefined}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 5, paddingRight: 8 }}>
+          <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color }} />
+          <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+            <Text style={{ color: c.foreground, fontSize: ROW.title, fontWeight: "600" }} numberOfLines={1}>{row.workspace || row.project}</Text>
+            <Text style={{ color: c.foregroundMuted, fontSize: ROW.meta }} numberOfLines={1}>
+              <Host item={row} />{[row.project, `${n} agent${n === 1 ? "" : "s"}`, ws ? "" : "workspace archived"].filter(Boolean).map((t) => ` · ${t}`).join("")}
+            </Text>
+          </View>
+        </Row>
       </View>
-    </Row>
+      {open ? row.agents.map((a, i) => (
+        <Text key={i} style={{ color: c.foreground, fontSize: ROW.meta, paddingLeft: 47, paddingRight: 8, paddingBottom: 4 }} numberOfLines={1}>{a.title}</Text>
+      )) : null}
+    </View>
   );
 }
 
@@ -534,7 +548,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   useEffect(() => {
     if (archiveFilling && isOpen("archive") && archive.items.length > 0 && !archive.loading) archive.loadMore();
   });
-  const wsRows = (list: Parameters<typeof groupByWorkspace>[0], color: string) =>
+  const wsRows = (list: { hostId: string; hostLabel: string; workspaceId: string | null; project: string; workspace: string; title: string }[], color: string) =>
     groupByWorkspace(list).map((row) => <WorkspaceLine key={row.key} theme={theme} row={row} color={color} onOpenWorkspace={openWorkspace} />);
 
   return (
