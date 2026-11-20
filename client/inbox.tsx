@@ -145,7 +145,7 @@ function Card({ theme, item, busy, compact, onAnswer, onOpen }: CardProps) {
     item.reason === "permission" ? { color: c.statusWarning, label: req?.kind ?? "permission" }
     : item.reason === "error" ? { color: c.statusDanger, label: "error" }
     : item.reason === "archived" ? { color: c.foregroundMuted, label: "archived" }
-    : { color: c.statusSuccess, label: "finished" };
+    : { color: c.statusSuccess, label: "ready to review" };
   const customActions = req?.actions ?? [];
 
   const dot = <View accessibilityLabel={status.label} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: status.color }} />;
@@ -506,11 +506,12 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const setChosen = (id: string) => { pick(id); store(HOST_KEY, id); };
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
   const scoped = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
-  // Finished agents are in Done (below); Waiting keeps permission requests and errors.
-  const items = scoped.filter((i) => i.reason !== "finished");
+  // Unseen finished agents are "Ready to review" in the app's sidebar, so they wait on you too.
+  const items = scoped;
   // An idle agent in a still-working workspace is already in Running as background tasks.
-  const done = (scope === "all" ? allDone : allDone.filter((i) => i.hostId === scope)).filter((i) => !allRunning.some((r) => r.hostId === i.hostId && r.agentId === i.agentId));
-  const countOn = (id: string) => allItems.filter((i) => i.hostId === id && i.reason !== "finished").length;
+  const done = (scope === "all" ? allDone : allDone.filter((i) => i.hostId === scope)).filter((i) => !allRunning.some((r) => r.hostId === i.hostId && r.agentId === i.agentId))
+    .filter((i) => !allItems.some((w) => w.hostId === i.hostId && w.agentId === i.agentId));
+  const countOn = (id: string) => allItems.filter((i) => i.hostId === id).length;
   const running = allRunning.filter((i) => !i.needsYou && (scope === "all" || i.hostId === scope));
   const archive = useArchive(scope === "all" ? hosts.map((h) => h.serverId) : [scope], isOpen("archive"));
   const match = (i: Parameters<typeof matches>[0]) => matches(i, q);
@@ -561,7 +562,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
         </Text>
         {hosts.length > 1 ? (
           <View style={{ flexDirection: "row", gap: 12, paddingTop: 6, paddingRight: 6 }}>
-            <HostTile theme={theme} text="ALL" label="All hosts" color={c.foregroundMuted} count={allItems.filter((i) => i.reason !== "finished").length} on={scope === "all"} onPress={() => setChosen("all")} />
+            <HostTile theme={theme} text="ALL" label="All hosts" color={c.foregroundMuted} count={allItems.length} on={scope === "all"} onPress={() => setChosen("all")} />
             {hosts.map((h) => (
               <HostTile key={h.serverId} theme={theme} text={initials(h.label)} label={h.label} color={hostColor(h.serverId)}
                 count={countOn(h.serverId)} on={scope === h.serverId} onPress={() => setChosen(h.serverId)} />
@@ -595,7 +596,7 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
       {problems.length > 0 ? <Text style={{ color: c.statusWarning, fontSize: FS.small }}>Not shown: {problems.join(" · ")}</Text> : null}
 
       <Section theme={theme} title="Waiting on you" icon="Hand" color={c.statusWarning} open={isOpen("waiting")} onToggle={() => toggle("waiting")}
-        note={!loaded ? "loading…" : !shown.waiting.length ? (q ? "no matches" : "none") : `${shown.waiting.length} ${pending > 0 ? `· ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : "failed, newest first"}`}>
+        note={!loaded ? "loading…" : !shown.waiting.length ? (q ? "no matches" : "none") : `${shown.waiting.length}${pending > 0 ? ` · ${pending} permission request${pending === 1 ? "" : "s"}, oldest first` : ""}`}>
         {byWs ? wsRows(shown.waiting, c.statusWarning) : shown.waiting.map((item) => <Card key={item.key} theme={theme} item={item} busy={busyKey === item.key} compact={layout.compact} onAnswer={(it, behavior, opts) => void respond(it, behavior, opts)} onOpen={openAgent} />)}
       </Section>
 

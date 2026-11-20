@@ -17,8 +17,8 @@ function Badge({ count, icon, label, color, fg }: { count: number; icon: string;
 
 function InboxItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps) {
   const { items, running } = useInbox(5000, true);
-  // Same rules as the screen: finished agents are Done, not waiting; an agent waiting on a permission counts as waiting, not running.
-  const waiting = items.filter((i) => i.reason !== "finished").length;
+  // Same rules as the screen: unseen finished agents wait on you; an agent waiting on a permission counts as waiting, not running.
+  const waiting = items.length;
   const working = running.filter((i) => !i.needsYou).length;
   const c = theme.colors;
   return (
