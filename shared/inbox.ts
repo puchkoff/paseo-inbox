@@ -1,4 +1,7 @@
-import type { PaseoApi } from "@getpaseo/client";
+import type { getPaseoClient } from "@getpaseo/plugin/client";
+
+// @getpaseo/client is not a direct dependency, so the daemon build cannot resolve it.
+type PaseoApi = ReturnType<typeof getPaseoClient>;
 import { commandOf, isDestructive } from "./rules.ts";
 
 const BODY_MAX = 1500;
