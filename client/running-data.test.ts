@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectRunning, sortRunning } from "./running.ts";
+import { collectRunning, sortRunning } from "./running-data.ts";
 
 const agent = (over: Record<string, unknown>) => ({
   id: "a1", status: "running", title: "T", provider: "claude", model: "opus", workspaceId: "w1", updatedAt: "2026-01-01T00:10:00Z",

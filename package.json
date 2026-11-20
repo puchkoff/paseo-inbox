@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test shared/*.test.ts"
+    "test": "node --test shared/*.test.ts client/*.test.ts"
   },
   "devDependencies": {
     "@getpaseo/plugin": "0.11.4",

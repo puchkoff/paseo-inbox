@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectArchive, collectDone, collectInbox, isClosedSubagent, sortInbox } from "./inbox.ts";
+import { collectArchive, collectDone, collectInbox, isClosedSubagent, sortInbox } from "./inbox-data.ts";
 
 const agent = (over: Record<string, unknown>) => ({
   id: "a1", title: "T", provider: "claude", workspaceId: "w1", cwd: "/home/u/old-app", updatedAt: "2026-01-01T00:00:00Z",

@@ -1,6 +1,5 @@
 import type { getPaseoClient } from "@getpaseo/plugin/client";
 
-// @getpaseo/client is not a direct dependency, so the daemon build cannot resolve it.
 type PaseoApi = ReturnType<typeof getPaseoClient>;
 
 export interface RunningItem {

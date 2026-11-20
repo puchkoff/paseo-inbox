@@ -1,7 +1,7 @@
 import { getPaseoClient, useHosts } from "@getpaseo/plugin/client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type InboxItem, collectArchive, collectDone, collectInbox, sortInbox } from "../shared/inbox.ts";
-import { type RunningItem, collectRunning, sortRunning } from "../shared/running.ts";
+import { type InboxItem, collectArchive, collectDone, collectInbox, sortInbox } from "./inbox-data.ts";
+import { type RunningItem, collectRunning, sortRunning } from "./running-data.ts";
 
 export interface InboxState {
   items: InboxItem[];
