@@ -323,7 +323,6 @@ declare const localStorage: { getItem(key: string): string | null; setItem(key: 
 const COLLAPSED_KEY = "paseo-inbox:collapsed";
 const WS_PAGE = 20;
 type SectionId = "waiting" | "running" | "done" | "archive";
-const HOST_KEY = "paseo-inbox:host";
 
 function stored(key: string): string | null {
   try { return localStorage?.getItem(key) ?? null; } catch { return null; }
@@ -500,10 +499,8 @@ export function InboxScreen({ theme, host, layout, navigation }: PluginScreenPro
   const isOpen = (id: SectionId) => !!q || !collapsed.has(id);
   const { items: allItems, running: allRunning, done: allDone, problems, loaded, refresh } = useInbox(2000, true);
   const hosts = useHosts();
-  // Opens on the daemon selected in the app; the app remounts the screen when that selection changes.
-  // Last picked tile wins; the app's selected daemon is the default.
-  const [chosen, pick] = useState(() => stored(HOST_KEY) ?? host.id);
-  const setChosen = (id: string) => { pick(id); store(HOST_KEY, id); };
+  // Opens on all hosts; a picked tile lasts until the screen remounts.
+  const [chosen, setChosen] = useState("all");
   const scope = chosen === "all" || hosts.some((h) => h.serverId === chosen) ? chosen : "all";
   const scoped = scope === "all" ? allItems : allItems.filter((i) => i.hostId === scope);
   // Unseen finished agents are "Ready to review" in the app's sidebar, so they wait on you too.
